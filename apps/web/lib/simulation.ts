@@ -1,6 +1,7 @@
 import {
   medianPath,
   pathStats,
+  quantilePath,
   simulateBinary,
   simulateContinuous,
   type PathStats,
@@ -9,41 +10,69 @@ import {
 import type { Derived } from "./derive";
 import type { KellyState } from "./state";
 
-export interface MonteCarloResult {
-  /** Median wealth paths for [full Kelly, chosen fraction, 2× Kelly]. */
-  medians: Float64Array[];
-  /** Statistics for the *chosen* fraction. */
+export interface SimSettings {
+  /** Periods per path (binary: bets; continuous: trading days, 250 ≈ 1 year). */
+  steps: number;
+  /** Independent paths per strategy. */
+  trials: number;
+}
+
+export const DEFAULT_SIM: SimSettings = { steps: 250, trials: 400 };
+
+export interface StrategyResult {
+  key: "full" | "chosen" | "double" | "buyhold";
+  label: string;
+  fraction: number;
+  median: Float64Array;
   stats: PathStats;
+}
+
+export interface MonteCarloResult {
+  strategies: StrategyResult[];
+  /** P10–P90 band for the *chosen* strategy (critique #5). */
+  band: { lo: Float64Array; hi: Float64Array };
   steps: number;
   trials: number;
 }
 
-const TRIALS = 400;
-const STEPS = 250;
-
-export function runMonteCarlo(s: KellyState, d: Derived): MonteCarloResult | null {
+export function runMonteCarlo(
+  s: KellyState,
+  d: Derived,
+  settings: SimSettings = DEFAULT_SIM,
+): MonteCarloResult | null {
   if (d.fStar <= 0) return null;
-
-  const fDouble = s.mode === "bin" ? Math.min(2 * d.fStar, 0.99) : 2 * d.fStar;
-  const fractions = [d.fStar, d.fChosen, fDouble];
+  const { steps, trials } = settings;
 
   const simulate = (f: number): Paths =>
     s.mode === "bin"
-      ? simulateBinary(f, { p: s.pPct / 100, b: s.b }, { trials: TRIALS, steps: STEPS })
+      ? simulateBinary(f, { p: s.pPct / 100, b: s.b }, { trials, steps })
       : simulateContinuous(
           f,
           { mu: s.muPct / 100, r: s.rPct / 100, sigma: s.sigmaPct / 100 },
-          { trials: TRIALS, steps: STEPS, dt: 1 / 250 },
+          { trials, steps, dt: 1 / 250 },
         );
 
-  const sims = fractions.map(simulate);
-  const chosen = sims[1];
-  if (!chosen) return null;
+  const clampBin = (f: number) => (s.mode === "bin" ? Math.min(f, 0.99) : f);
 
-  return {
-    medians: sims.map(medianPath),
-    stats: pathStats(chosen),
-    steps: STEPS,
-    trials: TRIALS,
-  };
+  const defs: Array<{ key: StrategyResult["key"]; label: string; fraction: number }> = [
+    { key: "full", label: "Full Kelly (f*)", fraction: d.fStar },
+    { key: "chosen", label: `Elegida (${s.mult.toFixed(2)}×)`, fraction: d.fChosen },
+    { key: "double", label: "Sobreapuesta (2f*)", fraction: clampBin(2 * d.fStar) },
+  ];
+  // Benchmark (critique #6): buy & hold = 100% invested, continuous mode only.
+  if (s.mode === "cont") {
+    defs.push({ key: "buyhold", label: "Buy & Hold (f=1)", fraction: 1 });
+  }
+
+  let band: MonteCarloResult["band"] | null = null;
+  const strategies: StrategyResult[] = defs.map((def) => {
+    const paths = simulate(def.fraction);
+    if (def.key === "chosen") {
+      band = { lo: quantilePath(paths, 0.1), hi: quantilePath(paths, 0.9) };
+    }
+    return { ...def, median: medianPath(paths), stats: pathStats(paths) };
+  });
+
+  if (!band) return null;
+  return { strategies, band, steps, trials };
 }

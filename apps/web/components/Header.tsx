@@ -14,11 +14,12 @@ export default function Header() {
     <header className="topbar">
       <div className="topbar-inner">
         <span className="brand">
-          Theorema Kelly<span className="ver">v0.1.0</span>
+          Theorema Kelly<span className="ver">v0.2.0</span>
         </span>
         <nav className="tabs" aria-label="Secciones">
           {tab("/", "Criterio")}
           {tab("/analisis", "Análisis")}
+          {tab("/cartera", "Cartera")}
         </nav>
       </div>
     </header>

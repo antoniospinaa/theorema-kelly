@@ -15,10 +15,17 @@ interface MultSliderProps {
   idSuffix?: string;
 }
 
-/** Fractional-Kelly multiplier control (PRD §5.4). Shared state across views. */
+/**
+ * Fractional-Kelly multiplier (PRD §5.4). Slider + exact numeric entry
+ * (critique UX: values like 0.33× must be typeable). Shared state.
+ */
 export default function MultSlider({ withPresets = false, flat = false, idSuffix = "" }: MultSliderProps) {
   const { state, update } = useKelly();
   const id = "mult" + idSuffix;
+
+  const commit = (v: number) => {
+    if (Number.isFinite(v)) update({ mult: Math.min(2, Math.max(0, v)) });
+  };
 
   return (
     <div className={"slider-block" + (flat ? " flat" : "")}>
@@ -26,18 +33,29 @@ export default function MultSlider({ withPresets = false, flat = false, idSuffix
         <label className="label" htmlFor={id}>
           Multiplicador de Kelly (× f*)
         </label>
-        <output htmlFor={id} className="mono">
-          {state.mult.toFixed(2)}×
-        </output>
+        <span className="mult-exact">
+          <input
+            type="number"
+            id={id + "-exact"}
+            aria-label="Multiplicador exacto"
+            min={0}
+            max={2}
+            step={0.01}
+            value={state.mult}
+            onChange={(e) => commit(parseFloat(e.target.value))}
+          />
+          <span aria-hidden="true">×</span>
+        </span>
       </div>
       <input
         type="range"
         id={id}
+        aria-label="Multiplicador de Kelly"
         min={0}
         max={2}
-        step={0.05}
+        step={0.01}
         value={state.mult}
-        onChange={(e) => update({ mult: parseFloat(e.target.value) })}
+        onChange={(e) => commit(parseFloat(e.target.value))}
       />
       <div className="scale-row" aria-hidden="true">
         <span>0×</span>

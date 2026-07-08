@@ -54,14 +54,25 @@ export function simulateContinuous(f: number, params: ContinuousParams, opts: Si
 
 /** Pointwise median across paths, per time step. */
 export function medianPath(paths: Paths): Float64Array {
+  return quantilePath(paths, 0.5);
+}
+
+/** Pointwise quantile (0 < q < 1) across paths, per time step. */
+export function quantilePath(paths: Paths, q: number): Float64Array {
+  if (!(q > 0 && q < 1)) throw new RangeError(`q must be in (0,1); got ${q}`);
   const first = paths[0];
   if (!first) return new Float64Array(0);
   const T = first.length;
   const out = new Float64Array(T);
-  const col = new Float64Array(paths.length);
+  const col = new Array<number>(paths.length);
   for (let t = 0; t < T; t++) {
     for (let n = 0; n < paths.length; n++) col[n] = (paths[n] as Float64Array)[t] as number;
-    out[t] = median(col);
+    col.sort((a, b) => a - b);
+    const idx = q * (col.length - 1);
+    const loIdx = Math.floor(idx);
+    const hiIdx = Math.ceil(idx);
+    const frac = idx - loIdx;
+    out[t] = (col[loIdx] as number) * (1 - frac) + (col[hiIdx] as number) * frac;
   }
   return out;
 }

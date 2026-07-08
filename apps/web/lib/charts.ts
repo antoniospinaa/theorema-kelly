@@ -24,18 +24,22 @@ export interface GCurveOpts {
   growthFn: (f: number) => number;
 }
 
+/** X-axis extent of the G(f) chart; shared with CSV export. */
+export function gCurveXMax(mode: Mode, fStar: number, fChosen: number): number {
+  return fStar > 0
+    ? mode === "bin"
+      ? Math.min(0.99, Math.max(fStar * 3, fChosen * 1.25, 0.05))
+      : Math.max(fStar * 3, fChosen * 1.25, 0.05)
+    : 0.5;
+}
+
 export function drawGCurve(canvas: HTMLCanvasElement, { mode, fStar, fChosen, growthFn }: GCurveOpts): void {
   const c = ctx2d(canvas);
   if (!c) return;
   const { ctx, W, H } = c;
   ctx.clearRect(0, 0, W, H);
 
-  const xmax =
-    fStar > 0
-      ? mode === "bin"
-        ? Math.min(0.99, Math.max(fStar * 3, fChosen * 1.25, 0.05))
-        : Math.max(fStar * 3, fChosen * 1.25, 0.05)
-      : 0.5;
+  const xmax = gCurveXMax(mode, fStar, fChosen);
 
   const N = 240;
   const pts: Array<[number, number]> = [];
@@ -153,7 +157,29 @@ export function drawGCurve(canvas: HTMLCanvasElement, { mode, fStar, fChosen, gr
   );
 }
 
-export function drawMonteCarlo(canvas: HTMLCanvasElement, medians: Float64Array[], steps: number): void {
+export type SeriesColor = "sage" | "blue" | "ruin" | "ink";
+
+export interface MCSeries {
+  values: Float64Array;
+  color: SeriesColor;
+  dash?: number[];
+}
+
+export interface MCDrawOpts {
+  steps: number;
+  series: MCSeries[];
+  /** Optional P10–P90 band for the chosen strategy (critique #5). */
+  band?: { lo: Float64Array; hi: Float64Array };
+}
+
+const SERIES_VARS: Record<SeriesColor, string> = {
+  sage: "--sage",
+  blue: "--blue",
+  ruin: "--ruin",
+  ink: "--ink-70",
+};
+
+export function drawMonteCarlo(canvas: HTMLCanvasElement, { steps, series, band }: MCDrawOpts): void {
   const c = ctx2d(canvas);
   if (!c) return;
   const { ctx, W, H } = c;
@@ -161,12 +187,17 @@ export function drawMonteCarlo(canvas: HTMLCanvasElement, medians: Float64Array[
 
   let lo = Infinity;
   let hi = -Infinity;
-  for (const m of medians) {
-    for (const v of m) {
+  const consider = (arr: Float64Array) => {
+    for (const v of arr) {
       const l = Math.log10(Math.max(v, 1e-4));
       if (l < lo) lo = l;
       if (l > hi) hi = l;
     }
+  };
+  series.forEach((s) => consider(s.values));
+  if (band) {
+    consider(band.lo);
+    consider(band.hi);
   }
   const pad = Math.max((hi - lo) * 0.12, 0.02);
   lo -= pad;
@@ -191,6 +222,22 @@ export function drawMonteCarlo(canvas: HTMLCanvasElement, medians: Float64Array[
     ctx.lineTo(W, y);
     ctx.stroke();
   }
+  // P10–P90 band (under everything else)
+  if (band) {
+    ctx.fillStyle = cssVar("--blue-tint");
+    ctx.beginPath();
+    for (let t = 0; t <= steps; t++) {
+      const x = X(t);
+      const y = Y(band.hi[t] ?? 1);
+      if (t === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    for (let t = steps; t >= 0; t--) {
+      ctx.lineTo(X(t), Y(band.lo[t] ?? 1));
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
   // W = 1 reference (initial capital)
   ctx.strokeStyle = cssVar("--ink");
   ctx.setLineDash([2, 3]);
@@ -199,21 +246,15 @@ export function drawMonteCarlo(canvas: HTMLCanvasElement, medians: Float64Array[
   ctx.lineTo(W, Y(1));
   ctx.stroke();
   ctx.setLineDash([]);
-  // Series: full Kelly (sage), chosen (blue dashed), 2× Kelly (ruin)
-  const styles: Array<{ color: string; dash: number[] }> = [
-    { color: cssVar("--sage"), dash: [] },
-    { color: cssVar("--blue"), dash: [5, 4] },
-    { color: cssVar("--ruin"), dash: [] },
-  ];
-  medians.forEach((m, k) => {
-    const st = styles[k] ?? styles[0]!;
-    ctx.strokeStyle = st.color;
+  // Median lines
+  series.forEach((s) => {
+    ctx.strokeStyle = cssVar(SERIES_VARS[s.color]);
     ctx.lineWidth = 2;
-    ctx.setLineDash(st.dash);
+    ctx.setLineDash(s.dash ?? []);
     ctx.beginPath();
     for (let t = 0; t <= steps; t++) {
       const x = X(t);
-      const y = Y(m[t] ?? 1);
+      const y = Y(s.values[t] ?? 1);
       if (t === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }

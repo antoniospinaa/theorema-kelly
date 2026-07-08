@@ -1,15 +1,63 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useKelly } from "./KellyProvider";
 import NumField from "./NumField";
 import MultSlider from "./MultSlider";
-import { drawGCurve } from "@/lib/charts";
+import { drawGCurve, gCurveXMax } from "@/lib/charts";
 import { fmtGrowth, fmtMoney, fmtPct } from "@/lib/format";
+import { estimateWindow, fetchPrices, fetchRiskFree } from "@/lib/market";
+import { downloadCSV } from "@/lib/export";
+import type { KellyState } from "@/lib/state";
+
+/* --- Ejemplos precargados (crítica UX: onboarding) ----------------- */
+const EXAMPLES: Array<{ label: string; patch: Partial<KellyState> }> = [
+  { label: "Moneda sesgada", patch: { mode: "bin", pPct: 55, b: 1, mult: 1 } },
+  { label: "Acción típica", patch: { mode: "cont", muPct: 8, sigmaPct: 20, rPct: 4, mult: 0.5 } },
+  { label: "Cripto", patch: { mode: "cont", muPct: 30, sigmaPct: 70, rPct: 4, mult: 0.5 } },
+];
+
+/* --- Presets de apuesta binaria (objetivo 2 de Fase 2) -------------- */
+const BET_PRESETS: Array<{ id: string; label: string; pPct?: number; b?: number; note: string }> = [
+  { id: "custom", label: "Personalizada", note: "Introduzca p y b manualmente." },
+  { id: "coin", label: "Moneda justa", pPct: 50, b: 1, note: "Sin ventaja: f* = 0. Referencia educativa." },
+  { id: "biased", label: "Moneda sesgada 55/45", pPct: 55, b: 1, note: "El ejemplo clásico del paper: f* = 10 %." },
+  { id: "bj", label: "Blackjack con conteo", pPct: 50.8, b: 1, note: "Ventaja típica de un contador: ~0.8 % por mano (aprox. pago 1:1)." },
+  { id: "roulette", label: "Ruleta europea (rojo/negro)", pPct: 48.65, b: 1, note: "18/37 de ganar: ventaja negativa — la casa siempre gana. f* = 0." },
+  { id: "sports", label: "Cuota deportiva 2.50", pPct: 45, b: 1.5, note: "b = cuota decimal − 1. La p es SU estimación: el edge real depende de que su 45 % sea mejor que el implícito de la cuota (40 %)." },
+];
+
+/* --- Validación de plausibilidad (crítica #1) ------------------------ */
+function plausibilityWarnings(s: KellyState): string[] {
+  const w: string[] = [];
+  if (s.mode === "cont") {
+    if (s.sigmaPct < 5)
+      w.push(
+        `σ = ${s.sigmaPct} % anual es inusualmente baja. Rangos típicos: acciones 15–30 %, ETF amplios 10–20 %, bonos 5–10 %, cripto 50–100 %. Una σ subestimada infla f* de forma peligrosa.`,
+      );
+    if (s.muPct - s.rPct > 20)
+      w.push(
+        `Un exceso de retorno μ−r = ${(s.muPct - s.rPct).toFixed(1)} % anual sostenido es extraordinario (el S&P 500 histórico ronda 5–7 %). Verifique la estimación: el error en μ pesa ~20× más que el error en σ.`,
+      );
+  } else if (s.pPct > 60 && s.b >= 1) {
+    w.push(
+      `p = ${s.pPct} % con pago ${s.b}:1 es una ventaja enorme y rara en apuestas reales. Si p está sobreestimada, el f* calculado le hará sobreapostar.`,
+    );
+  }
+  return w;
+}
 
 export default function CriterioView() {
   const { state, derived, update } = useKelly();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  /* Estimador de mercado (objetivo 1 de Fase 2 / crítica #7) */
+  const [ticker, setTicker] = useState("AAPL");
+  const [windowDays, setWindowDays] = useState(252);
+  const [busy, setBusy] = useState(false);
+  const [estStatus, setEstStatus] = useState<string | null>(null);
+  const [estError, setEstError] = useState<string | null>(null);
+  const [betPreset, setBetPreset] = useState("custom");
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -30,12 +78,73 @@ export default function CriterioView() {
   const { fStar, fChosen, g, doubling, noEdge, regime } = derived;
   const timeUnit = state.mode === "bin" ? "per." : "años";
   const overbetting = !noEdge && state.mult > 1.0001;
+  const warnings = plausibilityWarnings(state);
+  const presetInfo = BET_PRESETS.find((p) => p.id === betPreset);
+
+  const handleEstimate = async () => {
+    setBusy(true);
+    setEstError(null);
+    setEstStatus(null);
+    try {
+      const data = await fetchPrices(ticker, windowDays + 80);
+      const est = estimateWindow(data, windowDays);
+      update({
+        mode: "cont",
+        muPct: Math.round(est.muAnnual * 10000) / 100,
+        sigmaPct: Math.round(est.sigmaAnnual * 10000) / 100,
+      });
+      setEstStatus(
+        `${est.ticker} (${est.source}) · ${est.from} → ${est.to} · n=${est.n} retornos · cierre ${fmtMoney(est.lastClose)} · μ̂=${(est.muAnnual * 100).toFixed(1)} % · σ̂=${(est.sigmaAnnual * 100).toFixed(1)} %`,
+      );
+    } catch (e) {
+      setEstError(e instanceof Error ? e.message : "Error al estimar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRiskFree = async () => {
+    setBusy(true);
+    setEstError(null);
+    try {
+      const rf = await fetchRiskFree();
+      update({ rPct: Math.round(rf.ratePct * 100) / 100 });
+      setEstStatus(
+        rf.source === "treasury"
+          ? `Tasa T-Bills (Tesoro EE. UU.): ${rf.ratePct.toFixed(2)} % · dato al ${rf.asOf}`
+          : `Fuente del Tesoro no disponible; usando ${rf.ratePct.toFixed(2)} % por defecto.`,
+      );
+    } catch (e) {
+      setEstError(e instanceof Error ? e.message : "Error al consultar la tasa.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const exportGCurve = () => {
+    const xmax = gCurveXMax(state.mode, fStar, fChosen);
+    const rows: Array<Array<string | number>> = [];
+    for (let i = 0; i <= 200; i++) {
+      const f = (xmax * i) / 200;
+      const gv = derived.growthFn(f);
+      if (Number.isFinite(gv)) rows.push([f.toFixed(5), gv.toFixed(8)]);
+    }
+    downloadCSV("theorema-kelly_G-curve.csv", ["f", "G(f)"], rows);
+  };
 
   return (
     <section aria-labelledby="h-criterio">
       <div className="page-head">
         <h1 id="h-criterio">Criterio de Kelly</h1>
         <p>Cálculo de la fracción óptima de capital y la tasa de crecimiento geométrico G(f).</p>
+        <div className="examples-row" role="group" aria-label="Ejemplos precargados">
+          <span className="label">Ejemplos:</span>
+          {EXAMPLES.map((ex) => (
+            <button key={ex.label} type="button" className="btn" onClick={() => update(ex.patch)}>
+              {ex.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="layout">
@@ -77,6 +186,30 @@ export default function CriterioView() {
 
               {state.mode === "bin" ? (
                 <fieldset>
+                  <div className="field">
+                    <label className="label" htmlFor="bet-preset">
+                      Tipo de apuesta
+                    </label>
+                    <select
+                      id="bet-preset"
+                      className="select"
+                      value={betPreset}
+                      onChange={(e) => {
+                        const preset = BET_PRESETS.find((p) => p.id === e.target.value);
+                        setBetPreset(e.target.value);
+                        if (preset?.pPct !== undefined && preset?.b !== undefined) {
+                          update({ pPct: preset.pPct, b: preset.b });
+                        }
+                      }}
+                    >
+                      {BET_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                    {presetInfo && <p className="hint">{presetInfo.note}</p>}
+                  </div>
                   <div className="grid-2">
                     <NumField
                       id="pwin"
@@ -93,7 +226,7 @@ export default function CriterioView() {
                       id="payb"
                       label="Pago (b)"
                       unit="a 1"
-                      hint="Ganancia neta por unidad apostada."
+                      hint="b = cuota decimal − 1."
                       value={state.b}
                       min={0.01}
                       step={0.1}
@@ -103,6 +236,46 @@ export default function CriterioView() {
                 </fieldset>
               ) : (
                 <fieldset>
+                  <div className="estimator">
+                    <span className="label" style={{ color: "var(--blue-deep)" }}>
+                      Estimar desde el mercado
+                    </span>
+                    <div className="estimator-row">
+                      <input
+                        type="text"
+                        aria-label="Ticker del activo"
+                        value={ticker}
+                        maxLength={12}
+                        onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                        placeholder="AAPL, MSFT, SPY…"
+                      />
+                      <select
+                        aria-label="Ventana de estimación"
+                        className="select"
+                        value={windowDays}
+                        onChange={(e) => setWindowDays(parseInt(e.target.value, 10))}
+                      >
+                        <option value={63}>63 días (3 m)</option>
+                        <option value={126}>126 días (6 m)</option>
+                        <option value={252}>252 días (1 a)</option>
+                        <option value={504}>504 días (2 a)</option>
+                      </select>
+                    </div>
+                    <div className="estimator-row">
+                      <button type="button" className="btn btn-primary" onClick={handleEstimate} disabled={busy}>
+                        {busy ? "Consultando…" : "Estimar μ y σ"}
+                      </button>
+                      <button type="button" className="btn" onClick={handleRiskFree} disabled={busy}>
+                        r del Tesoro
+                      </button>
+                    </div>
+                    {estStatus && <p className="status-line">{estStatus}</p>}
+                    {estError && <p className="hint err">{estError}</p>}
+                    <p className="hint">
+                      μ̂ y σ̂ anualizados desde retornos logarítmicos diarios. Ojo: el error de
+                      estimación en μ pesa ~20× más que en σ.
+                    </p>
+                  </div>
                   <div className="grid-2">
                     <NumField
                       id="mu"
@@ -142,6 +315,13 @@ export default function CriterioView() {
             </div>
           </div>
 
+          {warnings.map((w) => (
+            <div className="warn ochre" key={w.slice(0, 24)}>
+              <h4>Parámetros poco plausibles</h4>
+              <p>{w}</p>
+            </div>
+          ))}
+
           <div className="note">
             <span className="i" aria-hidden="true">
               i
@@ -162,6 +342,11 @@ export default function CriterioView() {
               <div>
                 <span className="label">Apuesta sugerida (f elegida × capital)</span>
                 <output className="mono">{fmtMoney(fChosen * state.capital)}</output>
+                {fChosen > 1 && (
+                  <p className="hint err">
+                    Posición mayor que el capital: requiere apalancamiento (ver advertencia).
+                  </p>
+                )}
               </div>
               <div style={{ textAlign: "right" }}>
                 <span className="label">Fracción aplicada</span>
@@ -190,6 +375,9 @@ export default function CriterioView() {
                     <span className="sw" style={{ background: "var(--ruin-tint)" }} />
                     Ruina
                   </span>
+                  <button type="button" className="btn" onClick={exportGCurve}>
+                    ↓ CSV
+                  </button>
                 </div>
               </div>
               <div className="chart-box">
@@ -242,10 +430,12 @@ export default function CriterioView() {
             <div className="warn ochre">
               <h4>Advertencia: apalancamiento implícito (f* &gt; 1)</h4>
               <p>
-                Con estos parámetros, la fracción óptima {fmtPct(fStar)} supera el 100 % del
-                capital: aplicarla exigiría pedir prestado. Recuerde además que f* es
-                extremadamente sensible al error de estimación de μ; en la práctica se recomienda
-                una fracción ≤ ½ Kelly.
+                Con estos parámetros la fracción óptima {fmtPct(fStar)} supera el 100 % del
+                capital: aplicarla exige pedir prestado (margen), lo que añade costo de
+                financiamiento y riesgo de <em>margin call</em> — una caída fuerte puede liquidar
+                la posición antes de cualquier recuperación. En la práctica, la mayoría de
+                inversores minoristas debería limitar f ≤ 1 (sin apalancamiento) y usar ½ Kelly o
+                menos, porque f* es extremadamente sensible al error de estimación de μ.
               </p>
             </div>
           )}

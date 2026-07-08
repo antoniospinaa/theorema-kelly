@@ -17,9 +17,26 @@ it never executes trades and never connects to brokers, by design.
 - **G(f) curve** — the signature chart: growth / overbetting / ruin zones, with the optimum and
   the user's chosen fraction marked.
 - **Fractional Kelly slider** — 0–200% of f\* with ¼, ½, 1×, 2× presets; every metric updates live.
-- **Monte Carlo** — 400 simulated wealth paths per strategy (full Kelly vs chosen vs 2× Kelly) on
-  a log scale, with median growth, max drawdown, ruin probability and Sharpe computed from the
-  simulation — not hardcoded.
+- **Monte Carlo** — simulated wealth paths per strategy (full Kelly vs chosen vs 2× Kelly, plus
+  Buy & Hold benchmark in continuous mode) on a log scale, with a P10–P90 percentile band and a
+  side-by-side comparison table of median growth, max drawdown, ruin probability and Sharpe —
+  all computed from the simulation, with user-selectable horizon and path count.
+
+## Phase 2 — live market data (v0.2.0)
+
+- **Market estimator**: type a ticker (AAPL, MSFT, SPY…) and the app fetches daily prices
+  server-side (Stooq with Yahoo Finance fallback — no API keys), computes annualized μ̂ and σ̂
+  from log returns over a selectable window (63/126/252/504 days), and fills the calculator.
+- **Risk-free rate**: one click pulls the latest average T-Bill rate from the U.S. Treasury
+  FiscalData API (falls back to a documented default).
+- **Multi-asset portfolio (`/cartera`)**: 2–6 tickers → aligned return series → covariance
+  matrix → F\* = Σ⁻¹(μ − r·1) weights, with leverage/short warnings and CSV export.
+- **Bet-type presets** (binary): biased coin, card counting, European roulette, sports odds —
+  each with an honest note about where the edge (if any) comes from.
+- **Guardrails**: plausibility warnings for unrealistic parameters (e.g. σ < 5% annual),
+  leverage/margin-call context when f\* > 1, losing-streak estimate and ±5pp win-rate
+  sensitivity table for binary betting.
+- **Export**: G(f) curve, Monte Carlo medians/percentiles and portfolio weights as CSV/JSON.
 
 ## Architecture
 
@@ -77,9 +94,9 @@ outside root directory" enabled). No environment variables are required for Phas
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 1 | Interactive calculator (this repo) | ✅ |
-| 2 | Market data pipeline (Supabase + cron) | — |
-| 3 | Multivariate portfolio F\* = Σ⁻¹(μ − r·1) UI | engine ready |
+| 1 | Interactive calculator | ✅ |
+| 2 | Live market data (prices, μ̂/σ̂, risk-free) | ✅ on-demand; Supabase audit trail pending |
+| 3 | Multivariate portfolio F\* = Σ⁻¹(μ − r·1) UI | ✅ `/cartera` |
 | 4 | Historical backtesting + μ-perturbation robustness | — |
 | 5 | Paper-trading journal (Supabase Auth) | — |
 

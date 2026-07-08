@@ -251,3 +251,42 @@ dialog::backdrop{background:rgba(26,26,27,.35);}
 
 .sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;}
 .stack > * + *{margin-top:var(--edge);}
+
+/* ---- Fase 2: selects, estimador, tablas comparativas ---------------- */
+input[type="text"], .select{
+  width:100%; padding:9px 10px; background:var(--paper);
+  border:1px solid var(--hairline); font-family:var(--mono); font-size:14px;
+  font-weight:500; color:var(--ink);
+}
+input[type="text"]:focus, .select:focus{border-color:var(--blue); outline:2px solid var(--blue); outline-offset:-1px;}
+.select{appearance:none; background-image:linear-gradient(45deg, transparent 50%, var(--ink-70) 50%), linear-gradient(135deg, var(--ink-70) 50%, transparent 50%); background-position:calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size:5px 5px; background-repeat:no-repeat; padding-right:30px; cursor:pointer;}
+
+.examples-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:12px;}
+.controls-row{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+.controls-row .select{width:auto;}
+
+.estimator{border:1px dashed var(--hairline); background:var(--paper-low); padding:14px; margin-bottom:16px;}
+.estimator-row{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;}
+.status-line{
+  font-family:var(--mono); font-size:11px; line-height:16px; color:var(--sage-text);
+  border-left:2px solid var(--sage); padding-left:8px; margin-top:10px; word-break:break-word;
+}
+
+.mult-exact{display:inline-flex; align-items:center; gap:4px; font-family:var(--mono); color:var(--blue-deep);}
+.mult-exact input{
+  width:72px; padding:4px 6px; background:var(--paper); border:1px solid var(--hairline);
+  font-family:var(--mono); font-size:16px; font-weight:500; color:var(--blue-deep); text-align:right;
+}
+.mult-exact input:focus{border-color:var(--blue); outline:2px solid var(--blue); outline-offset:-1px;}
+
+.cmp-wrap{overflow-x:auto; border-top:1px solid var(--hairline);}
+.cmp-table{width:100%; border-collapse:collapse; font-size:13px;}
+.cmp-table th, .cmp-table td{padding:9px 12px; text-align:right; border-bottom:1px solid var(--hairline-lo); white-space:nowrap;}
+.cmp-table thead th{
+  font-family:var(--mono); font-size:10px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--ink-70); border-bottom:1px solid var(--hairline);
+}
+.cmp-table tbody th{text-align:left; font-family:var(--sans); font-weight:500; color:var(--ink);}
+.cmp-table td.num{font-family:var(--mono); font-variant-numeric:tabular-nums;}
+.cmp-table tr.hl{background:var(--paper-low);}
+.cmp-table tr:last-child th, .cmp-table tr:last-child td{border-bottom:0;}

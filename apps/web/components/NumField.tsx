@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface NumFieldProps {
   id: string;
@@ -15,8 +15,9 @@ interface NumFieldProps {
 }
 
 /**
- * Numeric input that only commits valid values to shared state.
- * Invalid input keeps the last valid value in state and flags the field.
+ * Numeric input that only commits valid values to shared state, and syncs
+ * back when the value is changed externally (e.g. by the market estimator
+ * or a preset) — unless the user is currently typing in it.
  */
 export default function NumField({
   id,
@@ -29,8 +30,19 @@ export default function NumField({
   step,
   onCommit,
 }: NumFieldProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [raw, setRaw] = useState(String(value));
   const [invalid, setInvalid] = useState(false);
+
+  // External updates (presets, estimator) → refresh the visible value.
+  useEffect(() => {
+    if (document.activeElement === inputRef.current) return;
+    if (parseFloat(raw) !== value) {
+      setRaw(Number.isFinite(value) ? String(Math.round(value * 10000) / 10000) : "");
+      setInvalid(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
 
   const handleChange = (v: string) => {
     setRaw(v);
@@ -50,6 +62,7 @@ export default function NumField({
       </label>
       <div className="input-wrap">
         <input
+          ref={inputRef}
           type="number"
           id={id}
           value={raw}
