@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   covMatrix,
   estimateMuSigma,
   fStarPortfolio,
   logReturns,
+  portfolioStats,
 } from "kelly-engine";
 import { useKelly } from "./KellyProvider";
 import { alignSeries, fetchPrices, fetchRiskFree } from "@/lib/market";
@@ -26,16 +28,21 @@ interface PortfolioResult {
   from: string;
   to: string;
   n: number;
+  /** Raw inputs kept for the Cartera → Análisis bridge. */
+  muVec: number[];
+  covMx: number[][];
 }
 
 /** Fase 3 adelantada (crítica #9): F* = Σ⁻¹(μ − r·1) con datos reales. */
 export default function CarteraView() {
-  const { state } = useKelly();
+  const { state, update } = useKelly();
+  const router = useRouter();
   const [tickersText, setTickersText] = useState("AAPL, MSFT, SPY");
   const [windowDays, setWindowDays] = useState(252);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PortfolioResult | null>(null);
+  const autoRan = useRef(false);
 
   const compute = async () => {
     setBusy(true);
@@ -71,6 +78,8 @@ export default function CarteraView() {
         from: aligned.dates[0] ?? "",
         to: aligned.dates[aligned.dates.length - 1] ?? "",
         n: (aligned.dates.length || 1) - 1,
+        muVec: estimates.map((e) => e.muAnnual),
+        covMx: cov,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al calcular la cartera.");
@@ -80,8 +89,32 @@ export default function CarteraView() {
     }
   };
 
+  // Outputs por defecto (crítica F4-#2): calcula la cartera de ejemplo al entrar.
+  useEffect(() => {
+    if (autoRan.current) return;
+    autoRan.current = true;
+    void compute();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const totalFull = result?.rows.reduce((s, r) => s + r.weight, 0) ?? 0;
   const mult = state.mult;
+
+  /** Cartera → Análisis (crítica F4-#4): la cartera full-Kelly como activo sintético. */
+  const sendToAnalysis = () => {
+    if (!result) return;
+    const stats = portfolioStats(
+      result.rows.map((r) => r.weight),
+      { mu: result.muVec, r: result.rPct / 100, cov: result.covMx },
+    );
+    update({
+      mode: "cont",
+      muPct: Math.round(stats.muAnnual * 10000) / 100,
+      sigmaPct: Math.round(stats.sigmaAnnual * 10000) / 100,
+      rPct: Math.round(result.rPct * 100) / 100,
+    });
+    router.push("/analisis");
+  };
 
   const exportCSV = () => {
     if (!result) return;
@@ -181,9 +214,14 @@ export default function CarteraView() {
                       {result.from} → {result.to} · n={result.n} retornos · r={result.rPct.toFixed(2)} % ({result.rSource})
                     </span>
                   </div>
-                  <button type="button" className="btn" onClick={exportCSV}>
-                    ↓ CSV
-                  </button>
+                  <div className="controls-row">
+                    <button type="button" className="btn" onClick={exportCSV}>
+                      ↓ CSV
+                    </button>
+                    <button type="button" className="btn btn-primary" onClick={sendToAnalysis}>
+                      Simular en Análisis →
+                    </button>
+                  </div>
                 </div>
                 <table className="cmp-table" aria-label="Pesos de la cartera">
                   <thead>
@@ -275,6 +313,12 @@ export default function CarteraView() {
                 <p className="hint" style={{ marginTop: 6 }}>
                   Capital de referencia: {fmtMoney(state.capital)} → asignación aplicada{" "}
                   {fmtMoney(Math.max(0, totalFull * mult) * state.capital)}.
+                </p>
+                <p className="hint" style={{ marginTop: 6 }}>
+                  «Simular en Análisis» trata la cartera full-Kelly como un activo sintético
+                  (μ_p, σ_p): su f* es exactamente 1, así que el multiplicador escala la cartera
+                  completa — Monte Carlo multiactivo con banda de percentiles, drawdown y colas
+                  pesadas incluidos.
                 </p>
               </div>
             </div>

@@ -97,8 +97,25 @@ outside root directory" enabled). No environment variables are required for Phas
 | 1 | Interactive calculator | ✅ |
 | 2 | Live market data (prices, μ̂/σ̂, risk-free) | ✅ on-demand; Supabase audit trail pending |
 | 3 | Multivariate portfolio, Kelly≡MVO equivalence, condensation | ✅ `/cartera` (v0.3.0) |
-| 4 | Historical backtesting + μ-perturbation robustness | — |
+| 4 | Historical backtesting, μ-perturbation, fat tails, drawdown paths | ✅ (v0.4.0) |
 | 5 | Paper-trading journal (Supabase Auth) | — |
+
+### Phase 4 — backtesting & stress (v0.4.0)
+
+- **Historical backtest** (Análisis, continuous mode): constant-fraction strategies (full/½/¼
+  Kelly and Buy & Hold) on real price series with daily rebalancing — CAGR, volatility, max
+  drawdown, time underwater and Sharpe per strategy, plus a leveraged-wipeout guard. Explicit
+  in-sample caveat.
+- **μ-perturbation test**: f\* recomputed at μ̂ ± 2pp, demonstrating the capstone's ~20:1
+  sensitivity finding empirically.
+- **Fat tails**: optional Student-t(4) shocks in the Monte Carlo (continuous mode) to stress
+  Kelly sizing against crash-prone return distributions.
+- **Drawdown over time**: median and P90 drawdown paths for the chosen strategy — the lived
+  experience, not just the worst point.
+- **Cartera → Análisis bridge**: the full-Kelly portfolio becomes a synthetic asset (μ_p, σ_p)
+  whose Merton fraction is exactly 1, so the multiplier scales the whole portfolio through the
+  full Monte Carlo/drawdown/fat-tails pipeline. Cartera now auto-computes a default universe on
+  load.
 
 ### Phase 3 / UX hardening (v0.3.0)
 

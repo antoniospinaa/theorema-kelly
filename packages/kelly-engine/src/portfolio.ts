@@ -69,3 +69,29 @@ export function fStarPortfolio({ mu, r, cov }: PortfolioParams): number[] {
   const excess = mu.map((m) => m - r);
   return solveLinearSystem(cov, excess);
 }
+
+/**
+ * Aggregate (μ_p, σ_p) of a weighted portfolio, treated as a synthetic asset:
+ *   μ_p = r + wᵀ(μ − r·1)   ·   σ_p = √(wᵀ Σ w)
+ *
+ * Key property: for w = F* (full Kelly), the synthetic asset's Merton
+ * fraction is exactly 1 — so a fractional-Kelly multiplier applied to the
+ * synthetic asset scales the whole portfolio (Cartera → Análisis bridge).
+ */
+export function portfolioStats(
+  weights: number[],
+  { mu, r, cov }: PortfolioParams,
+): { muAnnual: number; sigmaAnnual: number } {
+  const n = weights.length;
+  if (mu.length !== n || cov.length !== n) throw new RangeError("dimension mismatch");
+  let excess = 0;
+  for (let i = 0; i < n; i++) excess += (weights[i] as number) * ((mu[i] as number) - r);
+  let variance = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      variance += (weights[i] as number) * (weights[j] as number) * ((cov[i] as number[])[j] as number);
+    }
+  }
+  if (variance < 0) variance = 0;
+  return { muAnnual: r + excess, sigmaAnnual: Math.sqrt(variance) };
+}

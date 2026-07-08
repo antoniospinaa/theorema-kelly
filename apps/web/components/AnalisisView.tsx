@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { expectedMaxLosingStreak, fStarBinary } from "kelly-engine";
 import { useKelly } from "./KellyProvider";
 import MultSlider from "./MultSlider";
-import { drawMonteCarlo, type MCSeries, type SeriesColor } from "@/lib/charts";
+import BacktestCard from "./BacktestCard";
+import { drawDrawdown, drawMonteCarlo, type MCSeries, type SeriesColor } from "@/lib/charts";
 import { runMonteCarlo, type MonteCarloResult, type SimSettings } from "@/lib/simulation";
 import { downloadCSV, downloadJSON } from "@/lib/export";
 import { fmtMoney, fmtPct } from "@/lib/format";
@@ -19,9 +20,10 @@ const SERIES_STYLE: Record<string, { color: SeriesColor; dash?: number[] }> = {
 export default function AnalisisView() {
   const { state, derived } = useKelly();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ddCanvasRef = useRef<HTMLCanvasElement>(null);
   const lastResult = useRef<MonteCarloResult | null>(null);
   const [result, setResult] = useState<MonteCarloResult | null>(null);
-  const [settings, setSettings] = useState<SimSettings>({ steps: 250, trials: 400 });
+  const [settings, setSettings] = useState<SimSettings>({ steps: 250, trials: 400, fatTails: false });
 
   const stepOptions =
     state.mode === "bin"
@@ -40,18 +42,26 @@ export default function AnalisisView() {
 
   const paint = useCallback((res: MonteCarloResult | null) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    if (!res) {
-      const ctx = canvas.getContext("2d");
-      ctx?.clearRect(0, 0, canvas.width, canvas.height);
-      return;
+    if (canvas) {
+      if (!res) {
+        canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+      } else {
+        const series: MCSeries[] = res.strategies.map((st) => ({
+          values: st.median,
+          color: SERIES_STYLE[st.key]?.color ?? "ink",
+          dash: SERIES_STYLE[st.key]?.dash,
+        }));
+        drawMonteCarlo(canvas, { steps: res.steps, series, band: res.band });
+      }
     }
-    const series: MCSeries[] = res.strategies.map((st) => ({
-      values: st.median,
-      color: SERIES_STYLE[st.key]?.color ?? "ink",
-      dash: SERIES_STYLE[st.key]?.dash,
-    }));
-    drawMonteCarlo(canvas, { steps: res.steps, series, band: res.band });
+    const ddCanvas = ddCanvasRef.current;
+    if (ddCanvas) {
+      if (!res) {
+        ddCanvas.getContext("2d")?.clearRect(0, 0, ddCanvas.width, ddCanvas.height);
+      } else {
+        drawDrawdown(ddCanvas, { steps: res.steps, median: res.dd.median, p90: res.dd.p90 });
+      }
+    }
   }, []);
 
   const run = useCallback(() => {
@@ -69,10 +79,9 @@ export default function AnalisisView() {
 
   // Redraw on resize without re-simulating.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
     const ro = new ResizeObserver(() => paint(lastResult.current));
-    ro.observe(canvas);
+    if (canvasRef.current) ro.observe(canvasRef.current);
+    if (ddCanvasRef.current) ro.observe(ddCanvasRef.current);
     return () => ro.disconnect();
   }, [paint]);
 
@@ -140,6 +149,25 @@ export default function AnalisisView() {
                   </span>
                 </div>
                 <div className="controls-row">
+                  {state.mode === "cont" && (
+                    <div className="seg mini" role="group" aria-label="Distribución de los shocks">
+                      <button
+                        type="button"
+                        aria-pressed={!settings.fatTails}
+                        onClick={() => setSettings((s) => ({ ...s, fatTails: false }))}
+                      >
+                        Normal
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={settings.fatTails}
+                        title="Shocks Student-t(4): caídas extremas mucho más frecuentes"
+                        onClick={() => setSettings((s) => ({ ...s, fatTails: true }))}
+                      >
+                        Colas pesadas
+                      </button>
+                    </div>
+                  )}
                   <select
                     aria-label="Horizonte de simulación"
                     className="select"
@@ -253,6 +281,59 @@ export default function AnalisisView() {
               </div>
             )}
           </div>
+
+          {/* Drawdown temporal (crítica F4-#3) */}
+          {result && !derived.noEdge && (
+            <div className="card">
+              <div className="card-body">
+                <div className="chart-head">
+                  <div>
+                    <h3>Drawdown en el tiempo</h3>
+                    <span className="label">
+                      Estrategia elegida ({state.mult.toFixed(2)}×)
+                      {settings.fatTails && state.mode === "cont" ? " · colas pesadas t(4)" : ""}
+                    </span>
+                  </div>
+                  <div className="legend">
+                    <span>
+                      <span className="sw line" style={{ background: "var(--blue)" }} />
+                      Mediana
+                    </span>
+                    <span>
+                      <span
+                        className="sw line"
+                        style={{
+                          backgroundImage:
+                            "repeating-linear-gradient(90deg, var(--ruin) 0 4px, transparent 4px 8px)",
+                        }}
+                      />
+                      P90 (peor decil)
+                    </span>
+                  </div>
+                </div>
+                <div className="chart-box">
+                  <span className="axis-y">DD</span>
+                  <canvas
+                    ref={ddCanvasRef}
+                    className="dd-canvas"
+                    role="img"
+                    aria-label="Evolución del drawdown en el tiempo: mediana y percentil 90 de la estrategia elegida"
+                  />
+                </div>
+                <p className="axis-x">
+                  t ({state.mode === "bin" ? "apuestas" : "días bursátiles"}) →
+                </p>
+                <p className="hint" style={{ marginTop: 8 }}>
+                  El drawdown máximo puntual esconde la experiencia real: esta curva muestra
+                  cuánto tiempo se pasa hundido respecto al pico anterior. Si la línea P90 le
+                  resulta intolerable, su fracción es demasiado alta.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Backtest histórico (PRD Fase 4) */}
+          {state.mode === "cont" && <BacktestCard rPct={state.rPct} />}
 
           {/* Extras de trading — modo binario (crítica #8) */}
           {state.mode === "bin" && !derived.noEdge && (

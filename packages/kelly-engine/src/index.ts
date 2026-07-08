@@ -17,6 +17,7 @@ export {
 
 export {
   fStarPortfolio,
+  portfolioStats,
   solveLinearSystem,
   type PortfolioParams,
 } from "./portfolio";
@@ -26,11 +27,18 @@ export {
   simulateContinuous,
   medianPath,
   quantilePath,
+  toDrawdowns,
   pathStats,
   type SimOptions,
   type Paths,
   type PathStats,
 } from "./simulate";
+
+export {
+  backtestConstantFraction,
+  type BacktestMetrics,
+  type BacktestResult,
+} from "./backtest";
 
 export {
   logReturns,
@@ -41,4 +49,4 @@ export {
   type MuSigmaEstimate,
 } from "./estimate";
 
-export { doublingTime, clamp, mulberry32, gaussian, median, type Rng } from "./common";
+export { doublingTime, clamp, mulberry32, gaussian, studentT, median, type Rng } from "./common";

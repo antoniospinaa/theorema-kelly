@@ -31,6 +31,23 @@ export function gaussian(rng: Rng): number {
   return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
+/**
+ * Unit-variance Student-t shock with `df` degrees of freedom (integer ≥ 3).
+ * Fat tails: with df=4, extreme moves are far more frequent than Gaussian —
+ * a standard way to stress-test Kelly sizing against crash-like returns.
+ */
+export function studentT(rng: Rng, df: number): number {
+  if (!Number.isInteger(df) || df < 3) throw new RangeError(`df must be an integer ≥ 3; got ${df}`);
+  const z = gaussian(rng);
+  let chi2 = 0;
+  for (let i = 0; i < df; i++) {
+    const g = gaussian(rng);
+    chi2 += g * g;
+  }
+  const t = z / Math.sqrt(chi2 / df);
+  return t / Math.sqrt(df / (df - 2)); // normalize to unit variance
+}
+
 export function median(values: ArrayLike<number>): number {
   const a = Array.from(values).sort((x, y) => x - y);
   if (a.length === 0) return NaN;

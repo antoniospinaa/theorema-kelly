@@ -4,6 +4,7 @@ import {
   quantilePath,
   simulateBinary,
   simulateContinuous,
+  toDrawdowns,
   type PathStats,
   type Paths,
 } from "kelly-engine";
@@ -15,9 +16,11 @@ export interface SimSettings {
   steps: number;
   /** Independent paths per strategy. */
   trials: number;
+  /** Student-t(4) shocks instead of Gaussian (continuous mode only). */
+  fatTails: boolean;
 }
 
-export const DEFAULT_SIM: SimSettings = { steps: 250, trials: 400 };
+export const DEFAULT_SIM: SimSettings = { steps: 250, trials: 400, fatTails: false };
 
 export interface StrategyResult {
   key: "full" | "chosen" | "double" | "buyhold";
@@ -31,6 +34,8 @@ export interface MonteCarloResult {
   strategies: StrategyResult[];
   /** P10–P90 band for the *chosen* strategy (critique #5). */
   band: { lo: Float64Array; hi: Float64Array };
+  /** Drawdown-over-time (median and P90 worst) for the chosen strategy. */
+  dd: { median: Float64Array; p90: Float64Array };
   steps: number;
   trials: number;
 }
@@ -49,7 +54,12 @@ export function runMonteCarlo(
       : simulateContinuous(
           f,
           { mu: s.muPct / 100, r: s.rPct / 100, sigma: s.sigmaPct / 100 },
-          { trials, steps, dt: 1 / 250 },
+          {
+            trials,
+            steps,
+            dt: 1 / 250,
+            tails: settings.fatTails ? { df: 4 } : undefined,
+          },
         );
 
   const clampBin = (f: number) => (s.mode === "bin" ? Math.min(f, 0.99) : f);
@@ -65,14 +75,17 @@ export function runMonteCarlo(
   }
 
   let band: MonteCarloResult["band"] | null = null;
+  let dd: MonteCarloResult["dd"] | null = null;
   const strategies: StrategyResult[] = defs.map((def) => {
     const paths = simulate(def.fraction);
     if (def.key === "chosen") {
       band = { lo: quantilePath(paths, 0.1), hi: quantilePath(paths, 0.9) };
+      const ddPaths = toDrawdowns(paths);
+      dd = { median: quantilePath(ddPaths, 0.5), p90: quantilePath(ddPaths, 0.9) };
     }
     return { ...def, median: medianPath(paths), stats: pathStats(paths) };
   });
 
-  if (!band) return null;
-  return { strategies, band, steps, trials };
+  if (!band || !dd) return null;
+  return { strategies, band, dd, steps, trials };
 }

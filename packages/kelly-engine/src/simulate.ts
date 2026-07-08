@@ -5,7 +5,7 @@
 
 import { type BinaryParams, wealthStepBinary } from "./binary";
 import { type ContinuousParams, wealthStepContinuous } from "./continuous";
-import { gaussian, median, type Rng } from "./common";
+import { gaussian, median, studentT, type Rng } from "./common";
 
 export interface SimOptions {
   /** Number of independent paths. Default 400. */
@@ -16,6 +16,11 @@ export interface SimOptions {
   rng?: Rng;
   /** Years per step (continuous model only). Default 1/250. */
   dt?: number;
+  /**
+   * Fat-tailed shocks (continuous model only): Student-t with `df` degrees
+   * of freedom instead of Gaussian. Simulates crash-prone return series.
+   */
+  tails?: { df: number };
 }
 
 export type Paths = Float64Array[];
@@ -37,19 +42,37 @@ export function simulateBinary(f: number, params: BinaryParams, opts: SimOptions
 }
 
 export function simulateContinuous(f: number, params: ContinuousParams, opts: SimOptions = {}): Paths {
-  const { trials = 400, steps = 250, rng = Math.random, dt = 1 / 250 } = opts;
+  const { trials = 400, steps = 250, rng = Math.random, dt = 1 / 250, tails } = opts;
+  const shock = tails ? () => studentT(rng, tails.df) : () => gaussian(rng);
   const paths: Paths = [];
   for (let n = 0; n < trials; n++) {
     const row = new Float64Array(steps + 1);
     row[0] = 1;
     let w = 1;
     for (let t = 1; t <= steps; t++) {
-      w = wealthStepContinuous(w, f, params, gaussian(rng), dt);
+      w = wealthStepContinuous(w, f, params, shock(), dt);
       row[t] = w;
     }
     paths.push(row);
   }
   return paths;
+}
+
+/**
+ * Transform wealth paths into drawdown paths: dd_t = 1 − W_t / max_{s≤t} W_s.
+ * Feed the result to `quantilePath` for median/P90 drawdown over time.
+ */
+export function toDrawdowns(paths: Paths): Paths {
+  return paths.map((row) => {
+    const out = new Float64Array(row.length);
+    let peak = row[0] as number;
+    for (let t = 0; t < row.length; t++) {
+      const w = row[t] as number;
+      if (w > peak) peak = w;
+      out[t] = peak > 0 ? 1 - w / peak : 1;
+    }
+    return out;
+  });
 }
 
 /** Pointwise median across paths, per time step. */

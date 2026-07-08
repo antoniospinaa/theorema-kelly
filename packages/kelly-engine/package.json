@@ -1,6 +1,6 @@
 {
   "name": "kelly-engine",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Pure TypeScript implementation of the Kelly Criterion: binary (repeated bet), continuous single-asset (Merton) and multivariate portfolio formulations, plus Monte Carlo utilities. No dependencies.",
   "keywords": [
     "kelly-criterion",

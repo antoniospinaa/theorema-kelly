@@ -301,3 +301,8 @@ input[type="text"]:focus, .select:focus{border-color:var(--blue); outline:2px so
 .presets button.exp:hover{background:var(--ochre); color:#fff;}
 .warn.strong{border-width:2px;}
 .warn .btn{display:inline-block;}
+
+/* ---- Fase 4 (v0.4): colas pesadas, drawdown, backtest ----------------- */
+.seg.mini{display:inline-grid; margin:0; grid-template-columns:auto auto;}
+.seg.mini button{min-height:36px; padding:8px 12px;}
+.dd-canvas{height:220px;}

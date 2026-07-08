@@ -28,7 +28,7 @@ export default function Footer() {
           </div>
           <div className="foot-right">
             <p className="strong">© 2026 Lab. Theorema</p>
-            <p className="dim">web v0.3.0 · kelly-engine v0.2.0 · Basado en Kelly (1956)</p>
+            <p className="dim">web v0.4.0 · kelly-engine v0.3.0 · Basado en Kelly (1956)</p>
           </div>
         </div>
       </footer>

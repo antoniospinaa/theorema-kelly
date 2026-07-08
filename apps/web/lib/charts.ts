@@ -157,7 +157,7 @@ export function drawGCurve(canvas: HTMLCanvasElement, { mode, fStar, fChosen, gr
   );
 }
 
-export type SeriesColor = "sage" | "blue" | "ruin" | "ink";
+export type SeriesColor = "sage" | "blue" | "ruin" | "ink" | "ochre";
 
 export interface MCSeries {
   values: Float64Array;
@@ -177,7 +177,83 @@ const SERIES_VARS: Record<SeriesColor, string> = {
   blue: "--blue",
   ruin: "--ruin",
   ink: "--ink-70",
+  ochre: "--ochre",
 };
+
+/** Drawdown-over-time chart (critique F4-#3): 0% at top, deeper is lower. */
+export function drawDrawdown(
+  canvas: HTMLCanvasElement,
+  { steps, median, p90 }: { steps: number; median: Float64Array; p90: Float64Array },
+): void {
+  const c = ctx2d(canvas);
+  if (!c) return;
+  const { ctx, W, H } = c;
+  ctx.clearRect(0, 0, W, H);
+
+  let maxDd = 0.05;
+  for (const v of p90) if (v > maxDd) maxDd = v;
+  maxDd *= 1.15;
+  const X = (t: number) => (t / steps) * W;
+  const Y = (dd: number) => (dd / maxDd) * H; // 0 at top, deeper drawdown lower
+
+  // Grid
+  ctx.strokeStyle = "rgba(26,26,27,.06)";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 8; i++) {
+    const x = (W * i) / 8;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  for (let i = 1; i < 4; i++) {
+    const y = (H * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  // Median area fill
+  ctx.fillStyle = cssVar("--blue-tint");
+  ctx.beginPath();
+  ctx.moveTo(0, Y(0));
+  for (let t = 0; t <= steps; t++) ctx.lineTo(X(t), Y(median[t] ?? 0));
+  ctx.lineTo(W, Y(0));
+  ctx.closePath();
+  ctx.fill();
+  // Median line (blue)
+  ctx.strokeStyle = cssVar("--blue");
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let t = 0; t <= steps; t++) {
+    const x = X(t);
+    const y = Y(median[t] ?? 0);
+    if (t === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  // P90 line (ruin, dashed)
+  ctx.strokeStyle = cssVar("--ruin");
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  for (let t = 0; t <= steps; t++) {
+    const x = X(t);
+    const y = Y(p90[t] ?? 0);
+    if (t === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Labels
+  ctx.fillStyle = cssVar("--ink-55");
+  ctx.font = '11px "JetBrains Mono", monospace';
+  ctx.textAlign = "left";
+  ctx.fillText("0%", 4, 12);
+  ctx.fillText("−" + (maxDd * 100).toFixed(0) + "%", 4, H - 6);
+  ctx.textAlign = "right";
+  ctx.fillText("t=" + steps, W - 4, H - 6);
+}
 
 export function drawMonteCarlo(canvas: HTMLCanvasElement, { steps, series, band }: MCDrawOpts): void {
   const c = ctx2d(canvas);
