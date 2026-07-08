@@ -3,10 +3,11 @@
 import { useKelly } from "./KellyProvider";
 
 const PRESETS = [
-  { v: 0.25, label: "¼ Kelly" },
-  { v: 0.5, label: "½ Kelly" },
-  { v: 1, label: "Full" },
-  { v: 2, label: "2×" },
+  { v: 0.25, label: "¼ Kelly", exp: false },
+  { v: 0.5, label: "½ Kelly", exp: false },
+  { v: 1, label: "Full", exp: false },
+  // 2× Kelly guarantees zero long-run growth: experimental/educational only.
+  { v: 2, label: "2× ⚠", exp: true },
 ];
 
 interface MultSliderProps {
@@ -65,7 +66,13 @@ export default function MultSlider({ withPresets = false, flat = false, idSuffix
       {withPresets && (
         <div className="presets" role="group" aria-label="Preajustes de fracción">
           {PRESETS.map((p) => (
-            <button key={p.v} type="button" onClick={() => update({ mult: p.v })}>
+            <button
+              key={p.v}
+              type="button"
+              className={p.exp ? "exp" : undefined}
+              title={p.exp ? "Experimental: 2× Kelly garantiza crecimiento cero a largo plazo" : undefined}
+              onClick={() => update({ mult: p.v })}
+            >
               {p.label}
             </button>
           ))}

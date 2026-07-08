@@ -15,10 +15,30 @@ export interface RiskFreeData {
   source: "treasury" | "default";
 }
 
+/**
+ * Common crypto symbols people type bare ("BTC") resolve to the -USD pair;
+ * without this, Yahoo returns an unrelated equity that happens to use the
+ * same ticker (e.g. "BTC" ≠ Bitcoin).
+ */
+const CRYPTO_BARE = new Set(["BTC", "ETH", "SOL", "ADA", "XRP", "DOGE", "LTC", "BNB", "AVAX", "DOT"]);
+
+export function resolveTicker(input: string): string {
+  const t = input.trim().toUpperCase();
+  return CRYPTO_BARE.has(t) ? `${t}-USD` : t;
+}
+
 export async function fetchPrices(ticker: string, days = 730): Promise<PricesData> {
-  const res = await fetch(`/api/prices?ticker=${encodeURIComponent(ticker)}&days=${days}`);
-  const json = (await res.json()) as PricesData & { error?: string };
-  if (!res.ok) throw new Error(json.error ?? "Error al consultar precios.");
+  const resolved = resolveTicker(ticker);
+  const res = await fetch(`/api/prices?ticker=${encodeURIComponent(resolved)}&days=${days}`);
+  let json: (PricesData & { error?: string }) | null = null;
+  try {
+    json = (await res.json()) as PricesData & { error?: string };
+  } catch {
+    /* non-JSON error body */
+  }
+  if (!res.ok || !json || !Array.isArray(json.closes)) {
+    throw new Error(json?.error ?? `Error al consultar precios de «${resolved}» (HTTP ${res.status}).`);
+  }
   return json;
 }
 

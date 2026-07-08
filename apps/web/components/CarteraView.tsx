@@ -145,6 +145,19 @@ export default function CarteraView() {
             </div>
           </div>
 
+          <div className="note">
+            <span className="i" aria-hidden="true">
+              i
+            </span>
+            <p>
+              <strong>Kelly ≡ Markowitz:</strong> aplicar un multiplicador m a F* equivale a
+              resolver el MVO con aversión al riesgo λ = 1/m. Con m = 1 (full Kelly), λ = 1: el
+              punto de máximo crecimiento sobre la frontera eficiente. El multiplicador se ajusta
+              en la pestaña «Criterio» (actual: {state.mult.toFixed(2)}×, λ ={" "}
+              {state.mult > 0 ? (1 / state.mult).toFixed(2) : "∞"}).
+            </p>
+          </div>
+
           <div className="warn ochre">
             <h4>Sensibilidad extrema a μ̂</h4>
             <p>
@@ -228,6 +241,21 @@ export default function CarteraView() {
                     );
                   })}
                 </div>
+                {(() => {
+                  const gross = result.rows.reduce((s, r) => s + Math.abs(r.weight * mult), 0);
+                  if (gross <= 0) return null;
+                  const top = result.rows.reduce((a, b) =>
+                    Math.abs(a.weight) >= Math.abs(b.weight) ? a : b,
+                  );
+                  const share = (Math.abs(top.weight * mult) / gross) * 100;
+                  return (
+                    <p className="hint" style={{ marginTop: 10 }}>
+                      Condensación de cartera: {top.ticker} concentra el {share.toFixed(0)} % de la
+                      exposición bruta — Kelly multivariado tiende a concentrar en los activos con
+                      mejor μ̂/σ̂, otra razón para tratar los pesos con escepticismo.
+                    </p>
+                  );
+                })()}
                 {totalFull * mult > 1 && (
                   <div className="warn ochre" style={{ marginTop: 16 }}>
                     <h4>Cartera apalancada ({fmtPct(totalFull * mult, 0)} invertido)</h4>

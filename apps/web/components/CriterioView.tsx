@@ -12,10 +12,29 @@ import type { KellyState } from "@/lib/state";
 
 /* --- Ejemplos precargados (crítica UX: onboarding) ----------------- */
 const EXAMPLES: Array<{ label: string; patch: Partial<KellyState> }> = [
-  { label: "Moneda sesgada", patch: { mode: "bin", pPct: 55, b: 1, mult: 1 } },
+  { label: "Moneda sesgada", patch: { mode: "bin", pPct: 55, b: 1, mult: 0.5 } },
   { label: "Acción típica", patch: { mode: "cont", muPct: 8, sigmaPct: 20, rPct: 4, mult: 0.5 } },
-  { label: "Cripto", patch: { mode: "cont", muPct: 30, sigmaPct: 70, rPct: 4, mult: 0.5 } },
+  { label: "Cripto", patch: { mode: "cont", muPct: 30, sigmaPct: 70, rPct: 4, mult: 0.25 } },
 ];
+
+/* --- Perfiles de supuestos (modo continuo) --------------------------- */
+const PROFILES: Array<{ label: string; patch: Partial<KellyState> }> = [
+  { label: "Conservador", patch: { muPct: 6, sigmaPct: 12, mult: 0.25 } },
+  { label: "Base", patch: { muPct: 8, sigmaPct: 18, mult: 0.5 } },
+  { label: "Agresivo", patch: { muPct: 12, sigmaPct: 30, mult: 0.5 } },
+];
+
+/** CTA de la tarjeta de plausibilidad: lleva los supuestos a un rango prudente. */
+function conservativePatch(s: KellyState): Partial<KellyState> {
+  if (s.mode === "cont") {
+    return {
+      muPct: Math.min(s.muPct, s.rPct + 6),
+      sigmaPct: Math.max(s.sigmaPct, 15),
+      mult: Math.min(s.mult, 0.5),
+    };
+  }
+  return { pPct: Math.min(s.pPct, 55), mult: Math.min(s.mult, 0.5) };
+}
 
 /* --- Presets de apuesta binaria (objetivo 2 de Fase 2) -------------- */
 const BET_PRESETS: Array<{ id: string; label: string; pPct?: number; b?: number; note: string }> = [
@@ -188,7 +207,7 @@ export default function CriterioView() {
                 <fieldset>
                   <div className="field">
                     <label className="label" htmlFor="bet-preset">
-                      Tipo de apuesta
+                      1 · Tipo de apuesta
                     </label>
                     <select
                       id="bet-preset"
@@ -238,7 +257,7 @@ export default function CriterioView() {
                 <fieldset>
                   <div className="estimator">
                     <span className="label" style={{ color: "var(--blue-deep)" }}>
-                      Estimar desde el mercado
+                      1 · Activo — estimar desde el mercado
                     </span>
                     <div className="estimator-row">
                       <input
@@ -272,15 +291,28 @@ export default function CriterioView() {
                     {estStatus && <p className="status-line">{estStatus}</p>}
                     {estError && <p className="hint err">{estError}</p>}
                     <p className="hint">
-                      μ̂ y σ̂ anualizados desde retornos logarítmicos diarios. Ojo: el error de
-                      estimación en μ pesa ~20× más que en σ.
+                      Acciones/ETF: AAPL, SPY… · Cripto: BTC, ETH (se resuelven a BTC-USD,
+                      ETH-USD). μ̂ y σ̂ anualizados desde retornos logarítmicos diarios.
                     </p>
+                  </div>
+                  <div className="field">
+                    <span className="label" style={{ display: "block", marginBottom: 6 }}>
+                      2 · Supuestos del modelo
+                    </span>
+                    <div className="examples-row" style={{ marginTop: 0, marginBottom: 10 }} role="group" aria-label="Perfiles de supuestos">
+                      {PROFILES.map((p) => (
+                        <button key={p.label} type="button" className="btn" onClick={() => update(p.patch)}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="grid-2">
                     <NumField
                       id="mu"
                       label="Retorno esperado (μ)"
                       unit="% a."
+                      hint="Retorno anual esperado; muy sensible al error."
                       value={state.muPct}
                       min={-100}
                       max={200}
@@ -291,6 +323,7 @@ export default function CriterioView() {
                       id="sigma"
                       label="Volatilidad (σ)"
                       unit="% a."
+                      hint="Volatilidad anual histórica del activo."
                       value={state.sigmaPct}
                       min={0.1}
                       max={300}
@@ -302,6 +335,7 @@ export default function CriterioView() {
                     id="rfree"
                     label="Tasa libre de riesgo (r)"
                     unit="% a."
+                    hint="Referencia sin riesgo (T-Bills); lo que renta no invertir."
                     value={state.rPct}
                     min={-10}
                     max={50}
@@ -311,14 +345,25 @@ export default function CriterioView() {
                 </fieldset>
               )}
 
+              <span className="label" style={{ display: "block", marginTop: 18 }}>
+                3 · Sizing aplicado
+              </span>
               <MultSlider withPresets />
             </div>
           </div>
 
           {warnings.map((w) => (
-            <div className="warn ochre" key={w.slice(0, 24)}>
-              <h4>Parámetros poco plausibles</h4>
+            <div className="warn ochre strong" key={w.slice(0, 24)}>
+              <h4>⚠ Parámetros poco plausibles</h4>
               <p>{w}</p>
+              <button
+                type="button"
+                className="btn"
+                style={{ marginTop: 10 }}
+                onClick={() => update(conservativePatch(state))}
+              >
+                Usar rango conservador
+              </button>
             </div>
           ))}
 
@@ -338,21 +383,45 @@ export default function CriterioView() {
         <div className="stack">
           <div className="card">
             <div className="card-rule sage" />
-            <div className="bet-card" aria-live="polite">
-              <div>
-                <span className="label">Apuesta sugerida (f elegida × capital)</span>
-                <output className="mono">{fmtMoney(fChosen * state.capital)}</output>
-                {fChosen > 1 && (
-                  <p className="hint err">
-                    Posición mayor que el capital: requiere apalancamiento (ver advertencia).
-                  </p>
-                )}
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <span className="label">Fracción aplicada</span>
-                <output className="mono frac">{fmtPct(fChosen)}</output>
-              </div>
+            <div className="card-body" style={{ paddingBottom: 10 }}>
+              <span className="label" style={{ color: "var(--blue-deep)" }}>
+                {state.mode === "bin" ? "Apuesta sugerida" : "Tamaño de posición estimado"}
+              </span>
             </div>
+            <div
+              className={"stat-grid" + (state.mode === "cont" ? " three" : "")}
+              aria-live="polite"
+            >
+              <div className="stat alt dim">
+                <span className="label">Kelly teórico (f* · 1×)</span>
+                <output className="mono">{fmtMoney(fStar * state.capital)}</output>
+                <span className="sub">{fmtPct(fStar)}</span>
+              </div>
+              <div className="stat">
+                <span className="label">Aplicado ({state.mult.toFixed(2)}×)</span>
+                <output className="mono big" style={{ color: "var(--blue-deep)" }}>
+                  {fmtMoney(fChosen * state.capital)}
+                </output>
+                <span className="sub">{fmtPct(fChosen)}</span>
+              </div>
+              {state.mode === "cont" && (
+                <div className="stat alt dim">
+                  <span className="label">Sin apalancamiento (f ≤ 1)</span>
+                  <output className="mono">
+                    {fmtMoney(derived.fNoLeverage * state.capital)}
+                  </output>
+                  <span className="sub">{fmtPct(derived.fNoLeverage)}</span>
+                </div>
+              )}
+            </div>
+            {fChosen > 1 && (
+              <p className="hint" style={{ padding: "10px 16px", borderTop: "1px solid var(--hairline)" }}>
+                La fracción aplicada supera el 100 % de su capital (requiere margen). La columna
+                «Sin apalancamiento» invierte exactamente lo que tiene: como G(f) crece hasta f*,
+                invertir el 100 % es el óptimo alcanzable sin pedir prestado, y conserva un
+                crecimiento esperado de {fmtGrowth(derived.gNoLeverage)} anual.
+              </p>
+            )}
           </div>
 
           <div className="card">

@@ -290,3 +290,14 @@ input[type="text"]:focus, .select:focus{border-color:var(--blue); outline:2px so
 .cmp-table td.num{font-family:var(--mono); font-variant-numeric:tabular-nums;}
 .cmp-table tr.hl{background:var(--paper-low);}
 .cmp-table tr:last-child th, .cmp-table tr:last-child td{border-bottom:0;}
+
+/* ---- Fase 3 (v0.3): tarjeta de sizing triple, presets experimentales --- */
+.stat-grid.three{grid-template-columns:repeat(3,1fr);}
+@media (max-width:719px){ .stat-grid.three{grid-template-columns:1fr;} .stat-grid.three .stat{border-right:0; border-top:1px solid var(--hairline);} }
+.stat .sub{display:block; font-family:var(--mono); font-size:11px; color:var(--ink-55); margin-top:2px;}
+.stat.dim output{font-size:16px; line-height:24px; color:var(--ink-70);}
+.stat output.big{font-size:26px; line-height:34px; font-weight:700;}
+.presets button.exp{border-color:var(--ochre); color:var(--ochre-text);}
+.presets button.exp:hover{background:var(--ochre); color:#fff;}
+.warn.strong{border-width:2px;}
+.warn .btn{display:inline-block;}

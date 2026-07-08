@@ -31,5 +31,7 @@ export const DEFAULT_STATE: KellyState = {
   muPct: 12,
   rPct: 3,
   sigmaPct: 25,
-  mult: 1,
+  // Default to ½ Kelly: full Kelly assumes perfectly estimated parameters,
+  // which never holds in practice (UX critique: protect users from defaults).
+  mult: 0.5,
 };

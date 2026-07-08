@@ -96,9 +96,24 @@ outside root directory" enabled). No environment variables are required for Phas
 | --- | --- | --- |
 | 1 | Interactive calculator | ✅ |
 | 2 | Live market data (prices, μ̂/σ̂, risk-free) | ✅ on-demand; Supabase audit trail pending |
-| 3 | Multivariate portfolio F\* = Σ⁻¹(μ − r·1) UI | ✅ `/cartera` |
+| 3 | Multivariate portfolio, Kelly≡MVO equivalence, condensation | ✅ `/cartera` (v0.3.0) |
 | 4 | Historical backtesting + μ-perturbation robustness | — |
 | 5 | Paper-trading journal (Supabase Auth) | — |
+
+### Phase 3 / UX hardening (v0.3.0)
+
+- Crypto ticker aliases (`BTC` → `BTC-USD`) so bare symbols resolve to the actual asset, plus a
+  hardened Stooq→Yahoo fallback with explicit error surfacing.
+- Three sizing results side by side: theoretical Kelly (f\*), applied (multiplier), and
+  **no-leverage (f ≤ 1)** — when f\* > 1, investing 100% of capital is the constrained optimum,
+  shown with its expected growth.
+- Safer defaults and copy: ½ Kelly default multiplier, 2× marked experimental, "Tamaño de
+  posición estimado" instead of bet-centric wording in investment mode, guided 1-2-3 flow
+  (asset → assumptions → sizing), inline help under every field.
+- Plausibility card upgraded with a one-click "usar rango conservador" fix; assumption profiles
+  (conservador / base / agresivo).
+- `/cartera`: Kelly ≡ Markowitz note (multiplier m ↔ risk aversion λ = 1/m) and a portfolio
+  condensation readout.
 
 ## Disclaimer
 

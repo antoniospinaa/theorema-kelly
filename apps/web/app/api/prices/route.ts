@@ -19,6 +19,7 @@ const MAX_DAYS = 365 * 5;
 
 function normalizeStooq(ticker: string): string {
   const t = ticker.trim().toLowerCase();
+  if (t.endsWith("-usd")) return t.replace("-", ""); // BTC-USD → btcusd (crypto pairs)
   return t.includes(".") ? t : `${t}.us`; // bare symbols default to US market
 }
 

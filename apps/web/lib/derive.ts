@@ -16,8 +16,16 @@ export interface Derived {
   fStar: number;
   /** User's fraction: mult × f*, clamped < 0.99 in binary mode (log domain). */
   fChosen: number;
+  /**
+   * No-leverage alternative: min(fChosen, 1). When f* > 1, G(f) is increasing
+   * on [0, f*], so f = 1 (invest exactly the available capital) is the
+   * constrained optimum without margin.
+   */
+  fNoLeverage: number;
   /** Growth at fChosen (0 when there is no edge). */
   g: number;
+  /** Growth at fNoLeverage (0 when there is no edge). */
+  gNoLeverage: number;
   doubling: number;
   regime: ContinuousRegime;
   noEdge: boolean;
@@ -39,14 +47,18 @@ export function deriveKelly(s: KellyState): Derived {
   const fStar = Math.max(0, fStarRaw);
   let fChosen = s.mult * fStar;
   if (s.mode === "bin") fChosen = Math.min(fChosen, 0.99);
+  const fNoLeverage = Math.min(fChosen, 1);
 
   const g = fStar > 0 ? growthFn(fChosen) : 0;
+  const gNoLeverage = fStar > 0 ? growthFn(fNoLeverage) : 0;
 
   return {
     fStarRaw,
     fStar,
     fChosen,
+    fNoLeverage,
     g,
+    gNoLeverage,
     doubling: doublingTime(g),
     regime: classifyFStar(fStarRaw),
     noEdge: fStarRaw <= 0,
