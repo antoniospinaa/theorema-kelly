@@ -1,0 +1,19 @@
+{
+  "name": "theorema-kelly",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Kelly Criterion decision-support lab — monorepo (Next.js app + pure TypeScript math engine)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w web",
+    "build": "npm run build -w web",
+    "test": "npm run test -w kelly-engine",
+    "typecheck": "npm run typecheck -w kelly-engine && npm run typecheck -w web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

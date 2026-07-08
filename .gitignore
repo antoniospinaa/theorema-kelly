@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+
+# builds
+dist/
+coverage/
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# vercel
+.vercel/
+
+# supabase local
+supabase/.temp/
+
+# misc
+.DS_Store
+*.log
+*.tsbuildinfo
+next-env.d.ts.bak

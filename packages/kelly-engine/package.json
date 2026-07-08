@@ -1,0 +1,26 @@
+{
+  "name": "kelly-engine",
+  "version": "0.1.0",
+  "description": "Pure TypeScript implementation of the Kelly Criterion: binary (repeated bet), continuous single-asset (Merton) and multivariate portfolio formulations, plus Monte Carlo utilities. No dependencies.",
+  "keywords": [
+    "kelly-criterion",
+    "quantitative-finance",
+    "position-sizing",
+    "geometric-growth",
+    "monte-carlo"
+  ],
+  "author": "Antonio Spina <tony03spinag@gmail.com>",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  }
+}
