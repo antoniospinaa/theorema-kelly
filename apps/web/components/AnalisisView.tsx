@@ -9,6 +9,7 @@ import { drawDrawdown, drawMonteCarlo, type MCSeries, type SeriesColor } from "@
 import { runMonteCarlo, type MonteCarloResult, type SimSettings } from "@/lib/simulation";
 import { downloadCSV, downloadJSON } from "@/lib/export";
 import { fmtMoney, fmtPct } from "@/lib/format";
+import { money } from "@/lib/plain";
 
 const SERIES_STYLE: Record<string, { color: SeriesColor; dash?: number[] }> = {
   full: { color: "sage" },
@@ -25,6 +26,7 @@ export default function AnalisisView() {
   const [result, setResult] = useState<MonteCarloResult | null>(null);
   const [settings, setSettings] = useState<SimSettings>({ steps: 250, trials: 400, fatTails: false });
 
+  const isLab = state.view === "lab";
   const stepOptions =
     state.mode === "bin"
       ? [
@@ -136,6 +138,45 @@ export default function AnalisisView() {
 
       <div className="layout-analisis">
         <div className="stack">
+          {(() => {
+            const chosen = result?.strategies.find((s) => s.key === "chosen");
+            if (!chosen || derived.noEdge) return null;
+            const cap = state.capital;
+            const st = chosen.stats;
+            const unit = state.mode === "bin" ? "apuestas" : "días de mercado";
+            const ruinCount = Math.round(st.ruinProbability * 10000);
+            return (
+              <div className="card">
+                <div className="card-rule sage" />
+                <div className="card-body plain-card" aria-live="polite">
+                  <span className="label" style={{ color: "var(--sage-text)" }}>
+                    En palabras simples
+                  </span>
+                  <p>
+                    Simulamos <span className="n">{result?.trials}</span> futuros posibles de{" "}
+                    <span className="n">{result?.steps}</span> {unit} con tu fracción (
+                    {state.mult.toFixed(2)}× Kelly).
+                  </p>
+                  <p>
+                    En la mitad de esos futuros, tus {money(cap)} terminan en{" "}
+                    <strong className={"n " + (st.growth >= 0 ? "pos" : "neg")}>
+                      {money(cap * (1 + st.growth))}
+                    </strong>{" "}
+                    o más. Por el camino, la caída típica desde el punto más alto te dejaría en{" "}
+                    <strong className="n neg">{money(cap * (1 - st.maxDrawdown))}</strong> antes
+                    de recuperarte.
+                  </p>
+                  <p>
+                    {ruinCount === 0
+                      ? "Ningún escenario de la simulación perdió más del 90 % del capital."
+                      : `De cada 10,000 escenarios, ${ruinCount.toLocaleString("en-US")} pierden más del 90 % del capital.`}{" "}
+                    Compara las filas de la tabla: más fracción no siempre es más dinero al final.
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="card">
             <div className="card-rule" />
             <div className="card-body">
@@ -283,7 +324,7 @@ export default function AnalisisView() {
           </div>
 
           {/* Drawdown temporal (crítica F4-#3) */}
-          {result && !derived.noEdge && (
+          {isLab && result && !derived.noEdge && (
             <div className="card">
               <div className="card-body">
                 <div className="chart-head">
@@ -333,7 +374,7 @@ export default function AnalisisView() {
           )}
 
           {/* Backtest histórico (PRD Fase 4) */}
-          {state.mode === "cont" && <BacktestCard rPct={state.rPct} />}
+          {isLab && state.mode === "cont" && <BacktestCard rPct={state.rPct} />}
 
           {/* Extras de trading — modo binario (crítica #8) */}
           {state.mode === "bin" && !derived.noEdge && (
@@ -349,6 +390,7 @@ export default function AnalisisView() {
                   </span>
                   . Su fracción y su psicología deben sobrevivir esa racha.
                 </p>
+                {isLab && (
                 <table className="cmp-table" aria-label="Sensibilidad de f* a la probabilidad">
                   <thead>
                     <tr>
@@ -371,6 +413,7 @@ export default function AnalisisView() {
                     ))}
                   </tbody>
                 </table>
+                )}
                 <p className="hint" style={{ marginTop: 8 }}>
                   Si sobreestima p por 5 puntos, su «óptimo» real puede ser sobreapuesta severa.
                   Las comisiones y el slippage reducen b efectivo: réstelos antes de calcular.
@@ -398,6 +441,7 @@ export default function AnalisisView() {
             </div>
           </div>
 
+          {isLab && (
           <div className="card">
             <div className="card-body">
               <span className="label" style={{ color: "var(--blue-deep)", display: "block", marginBottom: 6 }}>
@@ -423,6 +467,7 @@ export default function AnalisisView() {
               </ul>
             </div>
           </div>
+          )}
         </div>
       </div>
     </section>

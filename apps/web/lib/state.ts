@@ -1,5 +1,8 @@
 export type Mode = "bin" | "cont";
 
+/** Progressive disclosure: "simple" hides the technical layer, "lab" shows everything. */
+export type ViewLevel = "simple" | "lab";
+
 /**
  * UI-facing state. Percentages are stored in UI units (55 = 55 %) and
  * converted to decimals only at the engine boundary (see derive.ts) —
@@ -7,6 +10,8 @@ export type Mode = "bin" | "cont";
  */
 export interface KellyState {
   mode: Mode;
+  /** UI detail level. */
+  view: ViewLevel;
   /** Bankroll, USD. */
   capital: number;
   /** Win probability, percent (binary mode). */
@@ -25,6 +30,7 @@ export interface KellyState {
 
 export const DEFAULT_STATE: KellyState = {
   mode: "bin",
+  view: "simple",
   capital: 10000,
   pPct: 55,
   b: 1,

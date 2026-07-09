@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useKelly } from "./KellyProvider";
 import NumField from "./NumField";
 import MultSlider from "./MultSlider";
+import PlainSummaryCard from "./PlainSummaryCard";
 import { drawGCurve, gCurveXMax } from "@/lib/charts";
 import { fmtGrowth, fmtMoney, fmtPct } from "@/lib/format";
 import { estimateWindow, fetchPrices, fetchRiskFree } from "@/lib/market";
@@ -95,6 +96,7 @@ export default function CriterioView() {
   }, [state, derived]);
 
   const { fStar, fChosen, g, doubling, noEdge, regime } = derived;
+  const isLab = state.view === "lab";
   const timeUnit = state.mode === "bin" ? "per." : "años";
   const overbetting = !noEdge && state.mult > 1.0001;
   const warnings = plausibilityWarnings(state);
@@ -381,6 +383,8 @@ export default function CriterioView() {
 
         {/* Resultados */}
         <div className="stack">
+          <PlainSummaryCard />
+
           <div className="card">
             <div className="card-rule sage" />
             <div className="card-body" style={{ paddingBottom: 10 }}>
@@ -424,6 +428,7 @@ export default function CriterioView() {
             )}
           </div>
 
+          {isLab && (
           <div className="card">
             <div className="card-rule" />
             <div className="card-body">
@@ -485,6 +490,7 @@ export default function CriterioView() {
               </div>
             </div>
           </div>
+          )}
 
           {noEdge && (
             <p className="error-msg" role="alert">

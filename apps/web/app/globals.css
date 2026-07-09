@@ -306,3 +306,9 @@ input[type="text"]:focus, .select:focus{border-color:var(--blue); outline:2px so
 .seg.mini{display:inline-grid; margin:0; grid-template-columns:auto auto;}
 .seg.mini button{min-height:36px; padding:8px 12px;}
 .dd-canvas{height:220px;}
+
+/* ---- v0.5: capa "en palabras simples" ------------------------------- */
+.view-toggle{margin-left:4px;}
+.plain-card p{font-size:16px; line-height:25px; margin-top:10px; color:var(--ink);}
+.plain-card p.hint{font-size:12px; line-height:16px; color:var(--ink-55);}
+.plain-card .n{font-family:var(--mono); font-variant-numeric:tabular-nums; font-weight:700;}

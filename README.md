@@ -100,6 +100,16 @@ outside root directory" enabled). No environment variables are required for Phas
 | 4 | Historical backtesting, μ-perturbation, fat tails, drawdown paths | ✅ (v0.4.0) |
 | 5 | Paper-trading journal (Supabase Auth) | — |
 
+### Plain-language layer (v0.5.0)
+
+A **Simple / Laboratorio** toggle in the header. Simple mode (the default) answers the question
+investors and bettors actually ask — *"I have $X: how much do I put in, what would I end up
+with, and how bad can it get?"* — with an "En palabras simples" card that translates every
+result into dollars over a relatable horizon (analytic lognormal quantiles, updated on every
+keystroke), plus a plain-Spanish narrative of the Monte Carlo (median outcome, typical
+trough, ruin frequency out of 10,000 scenarios). Laboratorio mode keeps the full technical
+layer: G(f) curve, percentile bands, drawdown paths, backtest, sensitivity tables, glossary.
+
 ### Phase 4 — backtesting & stress (v0.4.0)
 
 - **Historical backtest** (Análisis, continuous mode): constant-fraction strategies (full/½/¼
