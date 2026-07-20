@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useKelly } from "./KellyProvider";
 import { drawMonteCarlo, type MCSeries } from "@/lib/charts";
 import { runBacktest, type BacktestData } from "@/lib/backtest";
 import { fmtPct } from "@/lib/format";
@@ -8,6 +9,8 @@ import { downloadCSV } from "@/lib/export";
 
 /** Backtest histórico (PRD Fase 4): estrategias de fracción constante sobre precios reales. */
 export default function BacktestCard({ rPct }: { rPct: number }) {
+  const { L } = useKelly();
+  const B = L.backtest;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dataRef = useRef<BacktestData | null>(null);
   const [ticker, setTicker] = useState("SPY");
@@ -15,6 +18,13 @@ export default function BacktestCard({ rPct }: { rPct: number }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BacktestData | null>(null);
+
+  const stratLabel: Record<string, string> = {
+    full: B.stratFull,
+    half: B.stratHalf,
+    quarter: B.stratQuarter,
+    bh: B.stratBH,
+  };
 
   const paint = (d: BacktestData | null) => {
     const canvas = canvasRef.current;
@@ -34,10 +44,9 @@ export default function BacktestCard({ rPct }: { rPct: number }) {
       const d = await runBacktest(ticker, days, rPct);
       dataRef.current = d;
       setData(d);
-      // paint after state applies (canvas may mount on first result)
       requestAnimationFrame(() => paint(d));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error en el backtest.");
+      setError(e instanceof Error ? e.message : B.error);
     } finally {
       setBusy(false);
     }
@@ -55,7 +64,7 @@ export default function BacktestCard({ rPct }: { rPct: number }) {
   const exportCSV = () => {
     const d = dataRef.current;
     if (!d) return;
-    const header = ["t", ...d.strategies.map((s) => s.label.replaceAll(",", ";"))];
+    const header = ["t", ...d.strategies.map((s) => (stratLabel[s.key] ?? s.label).replaceAll(",", ";"))];
     const rows: Array<Array<string | number>> = [];
     for (let t = 0; t <= d.n; t++) {
       rows.push([t, ...d.strategies.map((s) => (s.wealth[t] ?? 1).toFixed(6))]);
@@ -69,31 +78,29 @@ export default function BacktestCard({ rPct }: { rPct: number }) {
       <div className="card-body">
         <div className="chart-head">
           <div>
-            <h3>Backtest histórico</h3>
-            <span className="label">
-              Fracción constante sobre precios reales · rebalanceo diario · r={rPct.toFixed(2)} %
-            </span>
+            <h3>{B.title}</h3>
+            <span className="label">{B.sub(rPct.toFixed(2))}</span>
           </div>
           <div className="controls-row">
             <input
               type="text"
-              aria-label="Ticker del backtest"
+              aria-label={B.tickerAria}
               style={{ width: 110 }}
               value={ticker}
               maxLength={12}
               onChange={(e) => setTicker(e.target.value.toUpperCase())}
             />
             <select
-              aria-label="Ventana del backtest"
+              aria-label={B.windowAria}
               className="select"
               value={days}
               onChange={(e) => setDays(parseInt(e.target.value, 10))}
             >
-              <option value={504}>2 años</option>
-              <option value={1260}>5 años</option>
+              <option value={504}>{B.y2}</option>
+              <option value={1260}>{B.y5}</option>
             </select>
             <button type="button" className="btn btn-primary" onClick={run} disabled={busy}>
-              {busy ? "Calculando…" : "Ejecutar backtest"}
+              {busy ? B.running : B.run}
             </button>
           </div>
         </div>
@@ -107,30 +114,31 @@ export default function BacktestCard({ rPct }: { rPct: number }) {
         {data && (
           <>
             <p className="status-line" style={{ marginBottom: 12 }}>
-              {data.ticker} ({data.source}) · {data.from} → {data.to} · n={data.n} días ·
-              μ̂={data.muPct.toFixed(1)} % · σ̂={data.sigmaPct.toFixed(1)} % · f*=
-              {fmtPct(Math.max(0, data.fStarRaw))}
+              {B.status(
+                data.ticker,
+                data.source,
+                data.from,
+                data.to,
+                data.n,
+                data.muPct.toFixed(1),
+                data.sigmaPct.toFixed(1),
+                fmtPct(Math.max(0, data.fStarRaw)),
+              )}
             </p>
             {data.fStarRaw <= 0 && (
               <p className="hint err" style={{ marginBottom: 10 }}>
-                En esta ventana μ̂ ≤ r: las estrategias Kelly quedan en f = 0 (solo tasa libre de
-                riesgo) y el único expuesto es Buy &amp; Hold.
+                {B.noEdge}
               </p>
             )}
             <div className="chart-box">
               <span className="axis-y">log W</span>
-              <canvas
-                ref={canvasRef}
-                className="mc-canvas"
-                role="img"
-                aria-label="Riqueza histórica de las estrategias full Kelly, medio Kelly, cuarto de Kelly y buy and hold"
-              />
+              <canvas ref={canvasRef} className="mc-canvas" role="img" aria-label={B.chartAria} />
             </div>
-            <p className="axis-x">t (días bursátiles) →</p>
+            <p className="axis-x">{B.tAxis}</p>
             <div className="legend" style={{ marginTop: 10 }}>
               <span>
                 <span className="sw line" style={{ background: "var(--sage)" }} />
-                Full Kelly
+                {B.legFull}
               </span>
               <span>
                 <span
@@ -140,7 +148,7 @@ export default function BacktestCard({ rPct }: { rPct: number }) {
                       "repeating-linear-gradient(90deg, var(--blue) 0 4px, transparent 4px 8px)",
                   }}
                 />
-                ½ Kelly
+                {B.legHalf}
               </span>
               <span>
                 <span
@@ -150,14 +158,14 @@ export default function BacktestCard({ rPct }: { rPct: number }) {
                       "repeating-linear-gradient(90deg, var(--ink-70) 0 2px, transparent 2px 5px)",
                   }}
                 />
-                ¼ Kelly
+                {B.legQuarter}
               </span>
               <span>
                 <span className="sw line" style={{ background: "var(--ochre)" }} />
-                Buy &amp; Hold
+                {B.legBH}
               </span>
               <button type="button" className="btn" onClick={exportCSV}>
-                ↓ CSV
+                {L.common.csv}
               </button>
             </div>
           </>
@@ -167,23 +175,23 @@ export default function BacktestCard({ rPct }: { rPct: number }) {
       {data && (
         <>
           <div className="cmp-wrap">
-            <table className="cmp-table" aria-label="Métricas del backtest">
+            <table className="cmp-table" aria-label={B.metricsAria}>
               <thead>
                 <tr>
-                  <th scope="col">Estrategia</th>
+                  <th scope="col">{L.common.strategy}</th>
                   <th scope="col">f</th>
-                  <th scope="col">CAGR</th>
-                  <th scope="col">Volatilidad</th>
-                  <th scope="col">DD máx.</th>
-                  <th scope="col">Bajo el agua</th>
-                  <th scope="col">Sharpe</th>
+                  <th scope="col">{B.colCagr}</th>
+                  <th scope="col">{B.colVol}</th>
+                  <th scope="col">{B.colDD}</th>
+                  <th scope="col">{B.colUw}</th>
+                  <th scope="col">{B.colSharpe}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.strategies.map((s) => (
                   <tr key={s.key}>
                     <th scope="row">
-                      {s.label}
+                      {stratLabel[s.key] ?? s.label}
                       {s.metrics.ruined ? " ☠" : ""}
                     </th>
                     <td className="num">{fmtPct(s.fraction, 1)}</td>
@@ -201,33 +209,34 @@ export default function BacktestCard({ rPct }: { rPct: number }) {
           </div>
           <div className="card-body" style={{ borderTop: "1px solid var(--hairline)" }}>
             <span className="label" style={{ color: "var(--blue-deep)", display: "block", marginBottom: 8 }}>
-              Sensibilidad de f* al error en μ̂ (test de perturbación)
+              {B.sensTitle}
             </span>
-            <table className="cmp-table" aria-label="Sensibilidad de f* a mu">
+            <table className="cmp-table" aria-label={B.sensAria}>
               <thead>
                 <tr>
-                  <th scope="col">Escenario</th>
+                  <th scope="col">{L.analisis.colScenario}</th>
                   <th scope="col">μ</th>
                   <th scope="col">f*</th>
                 </tr>
               </thead>
               <tbody>
-                {data.sensitivity.map((row) => (
-                  <tr key={row.label} className={row.label === "μ̂ estimada" ? "hl" : undefined}>
-                    <th scope="row">{row.label}</th>
-                    <td className="num">{row.muPct.toFixed(1)} %</td>
-                    <td className={"num" + (row.fStar < 0 ? " neg" : "")}>
-                      {(row.fStar * 100).toFixed(1)} %
-                    </td>
-                  </tr>
-                ))}
+                {data.sensitivity.map((row) => {
+                  const label =
+                    row.label === "μ̂ estimada" ? B.muEst : row.label === "μ̂ + 2 pp" ? B.muPlus : B.muMinus;
+                  return (
+                    <tr key={row.label} className={row.label === "μ̂ estimada" ? "hl" : undefined}>
+                      <th scope="row">{label}</th>
+                      <td className="num">{row.muPct.toFixed(1)} %</td>
+                      <td className={"num" + (row.fStar < 0 ? " neg" : "")}>
+                        {(row.fStar * 100).toFixed(1)} %
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             <p className="hint" style={{ marginTop: 8 }}>
-              Dos puntos porcentuales de error en μ̂ mueven f* de forma desproporcionada — la
-              demostración empírica de la sensibilidad ~20:1 del capstone. Advertencia: este
-              backtest es <em>in-sample</em> (f* se estimó con la misma serie), por lo que
-              favorece a Kelly por construcción.
+              {B.sensNote}
             </p>
           </div>
         </>

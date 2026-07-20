@@ -19,24 +19,24 @@ interface PortfolioRow {
   ticker: string;
   muPct: number;
   sigmaPct: number;
-  weight: number; // full-Kelly weight
+  weight: number;
 }
 
 interface PortfolioResult {
   rows: PortfolioRow[];
   rPct: number;
-  rSource: string;
+  rSourceTreasuryAsOf: string | null;
   from: string;
   to: string;
   n: number;
-  /** Raw inputs kept for the Cartera → Análisis bridge. */
   muVec: number[];
   covMx: number[][];
 }
 
-/** Fase 3 adelantada (crítica #9): F* = Σ⁻¹(μ − r·1) con datos reales. */
+/** F* = Σ⁻¹(μ − r·1) con datos reales (Fase 3). */
 export default function CarteraView() {
-  const { state, update } = useKelly();
+  const { state, L, update } = useKelly();
+  const P = L.cartera;
   const router = useRouter();
   const [tickersText, setTickersText] = useState("AAPL, MSFT, SPY");
   const [windowDays, setWindowDays] = useState(252);
@@ -55,7 +55,7 @@ export default function CarteraView() {
         .filter(Boolean);
       const unique = [...new Set(tickers)];
       if (unique.length < 2 || unique.length > 6) {
-        throw new Error("Introduzca entre 2 y 6 tickers separados por comas.");
+        throw new Error(P.errTickers);
       }
       const [prices, rf] = await Promise.all([
         Promise.all(unique.map((t) => fetchPrices(t, windowDays + 80))),
@@ -75,7 +75,7 @@ export default function CarteraView() {
           weight: weights[i] ?? 0,
         })),
         rPct: rf.ratePct,
-        rSource: rf.source === "treasury" ? `T-Bills al ${rf.asOf}` : "valor por defecto",
+        rSourceTreasuryAsOf: rf.source === "treasury" ? rf.asOf : null,
         from: aligned.dates[0] ?? "",
         to: aligned.dates[aligned.dates.length - 1] ?? "",
         n: (aligned.dates.length || 1) - 1,
@@ -83,14 +83,14 @@ export default function CarteraView() {
         covMx: cov,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al calcular la cartera.");
+      setError(e instanceof Error ? e.message : P.errGeneric);
       setResult(null);
     } finally {
       setBusy(false);
     }
   };
 
-  // Outputs por defecto (crítica F4-#2): calcula la cartera de ejemplo al entrar.
+  // Outputs por defecto: calcula la cartera de ejemplo al entrar.
   useEffect(() => {
     if (autoRan.current) return;
     autoRan.current = true;
@@ -101,7 +101,6 @@ export default function CarteraView() {
   const totalFull = result?.rows.reduce((s, r) => s + r.weight, 0) ?? 0;
   const mult = state.mult;
 
-  /** Cartera → Análisis (crítica F4-#4): la cartera full-Kelly como activo sintético. */
   const sendToAnalysis = () => {
     if (!result) return;
     const stats = portfolioStats(
@@ -113,7 +112,7 @@ export default function CarteraView() {
       muPct: Math.round(stats.muAnnual * 10000) / 100,
       sigmaPct: Math.round(stats.sigmaAnnual * 10000) / 100,
       rPct: Math.round(result.rPct * 100) / 100,
-      sourceLabel: `Cartera: ${result.rows.map((r) => r.ticker).join(" + ")}`,
+      sourceLabel: P.srcPortfolio(result.rows.map((r) => r.ticker).join(" + ")),
     });
     router.push("/analisis");
   };
@@ -122,19 +121,22 @@ export default function CarteraView() {
     if (!result) return;
     downloadCSV(
       "theorema-kelly_cartera.csv",
-      ["ticker", "mu_anual_%", "sigma_anual_%", "peso_full_kelly", `peso_aplicado_${mult.toFixed(2)}x`],
-      result.rows.map((r) => [r.ticker, r.muPct.toFixed(2), r.sigmaPct.toFixed(2), r.weight.toFixed(4), (r.weight * mult).toFixed(4)]),
+      ["ticker", "mu_annual_%", "sigma_annual_%", "full_kelly_weight", `applied_${mult.toFixed(2)}x`],
+      result.rows.map((r) => [
+        r.ticker,
+        r.muPct.toFixed(2),
+        r.sigmaPct.toFixed(2),
+        r.weight.toFixed(4),
+        (r.weight * mult).toFixed(4),
+      ]),
     );
   };
 
   return (
     <section aria-labelledby="h-cartera">
       <div className="page-head">
-        <h1 id="h-cartera">Cartera multiactivo</h1>
-        <p>
-          Pesos óptimos de Kelly <span className="mono">F* = Σ⁻¹(μ − r·1)</span> estimados desde
-          precios históricos reales.
-        </p>
+        <h1 id="h-cartera">{P.title}</h1>
+        <p>{P.subtitle}</p>
       </div>
 
       <div className="layout">
@@ -143,11 +145,11 @@ export default function CarteraView() {
             <div className="card-rule" />
             <div className="card-body">
               <span className="label" style={{ color: "var(--blue-deep)" }}>
-                Universo de activos
+                {P.universe}
               </span>
               <div className="field" style={{ marginTop: 12 }}>
                 <label className="label" htmlFor="tickers">
-                  Tickers (2–6, separados por comas)
+                  {P.tickersLabel}
                 </label>
                 <input
                   type="text"
@@ -156,11 +158,11 @@ export default function CarteraView() {
                   onChange={(e) => setTickersText(e.target.value.toUpperCase())}
                   placeholder="AAPL, MSFT, SPY"
                 />
-                <p className="hint">Acciones y ETF de EE. UU. (fuente: Stooq/Yahoo, diario).</p>
+                <p className="hint">{P.tickersHint}</p>
               </div>
               <div className="field">
                 <label className="label" htmlFor="cartera-window">
-                  Ventana de estimación
+                  {P.windowLabel}
                 </label>
                 <select
                   id="cartera-window"
@@ -168,15 +170,19 @@ export default function CarteraView() {
                   value={windowDays}
                   onChange={(e) => setWindowDays(parseInt(e.target.value, 10))}
                 >
-                  <option value={126}>126 días (6 m)</option>
-                  <option value={252}>252 días (1 a)</option>
-                  <option value={504}>504 días (2 a)</option>
+                  <option value={126}>{P.w126}</option>
+                  <option value={252}>{P.w252}</option>
+                  <option value={504}>{P.w504}</option>
                 </select>
               </div>
               <button type="button" className="btn btn-primary" onClick={compute} disabled={busy}>
-                {busy ? "Calculando…" : "Calcular F*"}
+                {busy ? P.calcBusy : P.calc}
               </button>
-              {error && <p className="error-msg" role="alert" style={{ marginTop: 12 }}>{error}</p>}
+              {error && (
+                <p className="error-msg" role="alert" style={{ marginTop: 12 }}>
+                  {error}
+                </p>
+              )}
             </div>
           </div>
 
@@ -184,23 +190,12 @@ export default function CarteraView() {
             <span className="i" aria-hidden="true">
               i
             </span>
-            <p>
-              <strong>Kelly ≡ Markowitz:</strong> aplicar un multiplicador m a F* equivale a
-              resolver el MVO con aversión al riesgo λ = 1/m. Con m = 1 (full Kelly), λ = 1: el
-              punto de máximo crecimiento sobre la frontera eficiente. El multiplicador se ajusta
-              en la pestaña «Criterio» (actual: {state.mult.toFixed(2)}×, λ ={" "}
-              {state.mult > 0 ? (1 / state.mult).toFixed(2) : "∞"}).
-            </p>
+            <p>{P.mvo(mult.toFixed(2), mult > 0 ? (1 / mult).toFixed(2) : "∞")}</p>
           </div>
 
           <div className="warn ochre">
-            <h4>Sensibilidad extrema a μ̂</h4>
-            <p>
-              Los pesos de Kelly heredan todo el ruido de la estimación de retornos: un error en μ
-              pesa ~20× más que un error en covarianza (hallazgo central del capstone). Trate F*
-              como un mapa de dirección, no como una orden de ejecución; en la práctica use ½
-              Kelly o menos y revise la estabilidad cambiando la ventana.
-            </p>
+            <h4>{P.sensTitle}</h4>
+            <p>{P.sensBody}</p>
           </div>
         </div>
 
@@ -210,45 +205,44 @@ export default function CarteraView() {
               <div className="card-rule sage" />
               <div className="card-body plain-card" aria-live="polite">
                 <span className="label" style={{ color: "var(--sage-text)" }}>
-                  En palabras simples
+                  {L.common.plainLabel}
                 </span>
                 <p>
-                  El modelo miró el historial de {result.rows.map((r) => r.ticker).join(", ")} y
-                  calculó cómo repartiría tu dinero para crecer lo más rápido posible sin
-                  quebrar. Con tus {money(state.capital)} y tu multiplicador ({mult.toFixed(2)}×),
-                  hoy pondría:
+                  {P.plainIntro(
+                    result.rows.map((r) => r.ticker).join(", "),
+                    money(state.capital),
+                    mult.toFixed(2),
+                  )}
                 </p>
                 <ul className="plain-list">
                   {result.rows.map((r) => {
                     const applied = r.weight * mult;
                     return (
                       <li key={r.ticker}>
-                        <strong className="n" style={{ color: applied < 0 ? "var(--ruin)" : "var(--blue-deep)" }}>
+                        <strong
+                          className="n"
+                          style={{ color: applied < 0 ? "var(--ruin)" : "var(--blue-deep)" }}
+                        >
                           {money(Math.abs(applied) * state.capital)}
                         </strong>{" "}
-                        {applied < 0 ? "en corto contra" : "en"} {r.ticker} (
-                        {fmtPct(Math.abs(applied), 1)})
+                        {applied < 0 ? P.inShort : P.inAsset} {r.ticker} ({fmtPct(Math.abs(applied), 1)})
                       </li>
                     );
                   })}
                   {totalFull * mult < 1 ? (
                     <li>
                       <strong className="n">{money((1 - totalFull * mult) * state.capital)}</strong>{" "}
-                      quedan en efectivo / T-Bills
+                      {P.cashLine}
                     </li>
                   ) : totalFull * mult > 1 ? (
                     <li className="neg">
-                      pedirías prestado{" "}
+                      {P.borrowLine}{" "}
                       <strong className="n">{money((totalFull * mult - 1) * state.capital)}</strong>{" "}
-                      (apalancamiento — no recomendado)
+                      {P.borrowTag}
                     </li>
                   ) : null}
                 </ul>
-                <p className="hint">
-                  «Full Kelly» = lo que el modelo pondría sin frenos; «Aplicado» = con tu
-                  multiplicador. μ̂ (retorno) y σ̂ (volatilidad) salen del historial elegido, así
-                  que cambian si cambias la ventana — trátalos como estimaciones, no verdades.
-                </p>
+                <p className="hint">{P.plainHint}</p>
               </div>
             </div>
           )}
@@ -259,28 +253,36 @@ export default function CarteraView() {
               <div className="card-body">
                 <div className="chart-head">
                   <div>
-                    <h3>Pesos óptimos</h3>
+                    <h3>{P.weightsTitle}</h3>
                     <span className="label">
-                      {result.from} → {result.to} · n={result.n} retornos · r={result.rPct.toFixed(2)} % ({result.rSource})
+                      {P.weightsMeta(
+                        result.from,
+                        result.to,
+                        result.n,
+                        result.rPct.toFixed(2),
+                        result.rSourceTreasuryAsOf
+                          ? P.srcTreasury(result.rSourceTreasuryAsOf)
+                          : P.srcDefault,
+                      )}
                     </span>
                   </div>
                   <div className="controls-row">
                     <button type="button" className="btn" onClick={exportCSV}>
-                      ↓ CSV
+                      {L.common.csv}
                     </button>
                     <button type="button" className="btn btn-primary" onClick={sendToAnalysis}>
-                      Simular en Análisis →
+                      {P.sendBtn}
                     </button>
                   </div>
                 </div>
-                <table className="cmp-table" aria-label="Pesos de la cartera">
+                <table className="cmp-table" aria-label={P.tableAria}>
                   <thead>
                     <tr>
-                      <th scope="col">Activo</th>
-                      <th scope="col">μ̂ anual</th>
-                      <th scope="col">σ̂ anual</th>
-                      <th scope="col">Full Kelly</th>
-                      <th scope="col">Aplicado ({mult.toFixed(2)}×)</th>
+                      <th scope="col">{P.colAsset}</th>
+                      <th scope="col">{P.colMu}</th>
+                      <th scope="col">{P.colSigma}</th>
+                      <th scope="col">{P.colFull}</th>
+                      <th scope="col">{P.colApplied(mult.toFixed(2))}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -296,7 +298,7 @@ export default function CarteraView() {
                       </tr>
                     ))}
                     <tr className="hl">
-                      <th scope="row">Total invertido</th>
+                      <th scope="row">{P.totalRow}</th>
                       <td className="num" colSpan={2}></td>
                       <td className="num">{fmtPct(totalFull, 1)}</td>
                       <td className="num">{fmtPct(totalFull * mult, 1)}</td>
@@ -312,7 +314,7 @@ export default function CarteraView() {
                         <div className="row">
                           <span>
                             {r.ticker}
-                            {applied < 0 ? " (corto)" : ""}
+                            {applied < 0 ? P.shortSuffix : ""}
                           </span>
                           <span>{fmtPct(applied, 1)}</span>
                         </div>
@@ -338,37 +340,29 @@ export default function CarteraView() {
                   const share = (Math.abs(top.weight * mult) / gross) * 100;
                   return (
                     <p className="hint" style={{ marginTop: 10 }}>
-                      Condensación de cartera: {top.ticker} concentra el {share.toFixed(0)} % de la
-                      exposición bruta — Kelly multivariado tiende a concentrar en los activos con
-                      mejor μ̂/σ̂, otra razón para tratar los pesos con escepticismo.
+                      {P.condensation(top.ticker, share.toFixed(0))}
                     </p>
                   );
                 })()}
                 {totalFull * mult > 1 && (
                   <div className="warn ochre" style={{ marginTop: 16 }}>
-                    <h4>Cartera apalancada ({fmtPct(totalFull * mult, 0)} invertido)</h4>
-                    <p>
-                      La suma de pesos aplicados supera el 100 % del capital: implica margen y
-                      riesgo de liquidación forzosa. Considere un multiplicador menor (pestaña
-                      Criterio) o restringir el universo.
-                    </p>
+                    <h4>{P.levTitle(fmtPct(totalFull * mult, 0))}</h4>
+                    <p>{P.levBody}</p>
                   </div>
                 )}
                 {result.rows.some((r) => r.weight < 0) && (
                   <p className="hint" style={{ marginTop: 10 }}>
-                    Los pesos negativos indican posición corta óptima según el modelo; esta
-                    herramienta no la recomienda para inversores minoristas.
+                    {P.shortNote}
                   </p>
                 )}
                 <p className="hint" style={{ marginTop: 6 }}>
-                  Capital de referencia: {fmtMoney(state.capital)} → asignación aplicada{" "}
-                  {fmtMoney(Math.max(0, totalFull * mult) * state.capital)}.
+                  {P.capitalRef(
+                    fmtMoney(state.capital),
+                    fmtMoney(Math.max(0, totalFull * mult) * state.capital),
+                  )}
                 </p>
                 <p className="hint" style={{ marginTop: 6 }}>
-                  «Simular en Análisis» trata la cartera full-Kelly como un activo sintético
-                  (μ_p, σ_p): su f* es exactamente 1, así que el multiplicador escala la cartera
-                  completa — Monte Carlo multiactivo con banda de percentiles, drawdown y colas
-                  pesadas incluidos.
+                  {P.bridgeNote}
                 </p>
               </div>
             </div>
@@ -378,8 +372,7 @@ export default function CarteraView() {
                 <div className="placeholder-box">
                   <p className="formula">F* = Σ⁻¹(μ − r·1)</p>
                   <p className="hint" style={{ marginTop: 8 }}>
-                    Introduzca 2–6 tickers y pulse «Calcular F*». Los retornos, la covarianza y la
-                    tasa libre de riesgo se obtienen automáticamente.
+                    {P.placeholderHint}
                   </p>
                 </div>
               </div>

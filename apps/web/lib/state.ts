@@ -1,3 +1,5 @@
+import type { Lang } from "./i18n";
+
 export type Mode = "bin" | "cont";
 
 /** Progressive disclosure: "simple" hides the technical layer, "lab" shows everything. */
@@ -12,6 +14,8 @@ export interface KellyState {
   mode: Mode;
   /** UI detail level. */
   view: ViewLevel;
+  /** UI language (browser-detected on mount; user override persisted). */
+  lang: Lang;
   /** Bankroll, USD. */
   capital: number;
   /** Win probability, percent (binary mode). */
@@ -37,6 +41,7 @@ export interface KellyState {
 export const DEFAULT_STATE: KellyState = {
   mode: "bin",
   view: "simple",
+  lang: "es",
   capital: 10000,
   pPct: 55,
   b: 1,

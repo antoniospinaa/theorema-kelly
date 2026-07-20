@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useKelly } from "./KellyProvider";
 
 interface NumFieldProps {
   id: string;
@@ -30,6 +31,7 @@ export default function NumField({
   step,
   onCommit,
 }: NumFieldProps) {
+  const { L } = useKelly();
   const inputRef = useRef<HTMLInputElement>(null);
   const [raw, setRaw] = useState(String(value));
   const [invalid, setInvalid] = useState(false);
@@ -81,7 +83,7 @@ export default function NumField({
           {hint}
         </p>
       )}
-      {invalid && <p className="hint err">Valor fuera de rango.</p>}
+      {invalid && <p className="hint err">{L.common.outOfRange}</p>}
     </div>
   );
 }

@@ -19,27 +19,24 @@ const SERIES_STYLE: Record<string, { color: SeriesColor; dash?: number[] }> = {
 };
 
 export default function AnalisisView() {
-  const { state, derived } = useKelly();
+  const { state, derived, L } = useKelly();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ddCanvasRef = useRef<HTMLCanvasElement>(null);
   const lastResult = useRef<MonteCarloResult | null>(null);
   const [result, setResult] = useState<MonteCarloResult | null>(null);
   const [settings, setSettings] = useState<SimSettings>({ steps: 250, trials: 400, fatTails: false });
 
+  const A = L.analisis;
   const isLab = state.view === "lab";
+
   const stepOptions =
     state.mode === "bin"
-      ? [
-          { v: 100, label: "100 apuestas" },
-          { v: 250, label: "250 apuestas" },
-          { v: 500, label: "500 apuestas" },
-          { v: 1000, label: "1000 apuestas" },
-        ]
+      ? [100, 250, 500, 1000].map((v) => ({ v, label: A.stepsBets(v) }))
       : [
-          { v: 125, label: "125 días (~6 m)" },
-          { v: 250, label: "250 días (~1 año)" },
-          { v: 500, label: "500 días (~2 años)" },
-          { v: 1250, label: "1250 días (~5 años)" },
+          { v: 125, label: A.stepsDays(125, A.y6m) },
+          { v: 250, label: A.stepsDays(250, A.y1) },
+          { v: 500, label: A.stepsDays(500, A.y2) },
+          { v: 1250, label: A.stepsDays(1250, A.y5) },
         ];
 
   const paint = useCallback((res: MonteCarloResult | null) => {
@@ -73,25 +70,23 @@ export default function AnalisisView() {
     paint(res);
   }, [state, derived, settings, paint]);
 
-  // Re-simulate (debounced) whenever parameters or settings change (objetivo 3: interactividad).
   useEffect(() => {
     const t = setTimeout(run, 150);
     return () => clearTimeout(t);
   }, [run]);
 
-  // Redraw on resize without re-simulating.
   useEffect(() => {
     const ro = new ResizeObserver(() => paint(lastResult.current));
     if (canvasRef.current) ro.observe(canvasRef.current);
     if (ddCanvasRef.current) ro.observe(ddCanvasRef.current);
     return () => ro.disconnect();
-  }, [paint]);
+  }, [paint, result !== null, isLab]);
 
   const exportData = (kind: "csv" | "json") => {
     const res = lastResult.current;
     if (!res) return;
     if (kind === "csv") {
-      const header = ["t", ...res.strategies.map((s) => s.label.replaceAll(",", ";")), "P10 elegida", "P90 elegida"];
+      const header = ["t", ...res.strategies.map((s) => s.label.replaceAll(",", ";")), "P10", "P90"];
       const rows: Array<Array<string | number>> = [];
       for (let t = 0; t <= res.steps; t++) {
         rows.push([
@@ -118,7 +113,6 @@ export default function AnalisisView() {
     }
   };
 
-  /* Extras de trading para modo binario (crítica #8) */
   const p = state.pPct / 100;
   const sensitivity =
     state.mode === "bin"
@@ -129,95 +123,94 @@ export default function AnalisisView() {
         })
       : [];
 
+  const chosen = result?.strategies.find((s) => s.key === "chosen");
+
   return (
     <section aria-labelledby="h-analisis">
       <div className="page-head">
-        <h1 id="h-analisis">Análisis de trayectorias</h1>
-        <p>Simulación de Monte Carlo con los parámetros definidos en «Criterio».</p>
+        <h1 id="h-analisis">{A.title}</h1>
+        <p>{A.subtitle}</p>
         <p className="status-line" style={{ marginTop: 8 }}>
-          Simulando: {state.sourceLabel ?? "supuestos manuales"} ·{" "}
+          {A.simulating} {state.sourceLabel ?? A.manual} ·{" "}
           {state.mode === "cont"
             ? `μ=${state.muPct.toFixed(1)} % · σ=${state.sigmaPct.toFixed(1)} % · r=${state.rPct.toFixed(2)} %`
-            : `p=${state.pPct.toFixed(1)} % · pago ${state.b} a 1`}{" "}
-          · cámbielos en la pestaña «Criterio».
+            : `p=${state.pPct.toFixed(1)} % · b=${state.b}`}{" "}
+          {A.changeIn}
         </p>
       </div>
 
       <div className="layout-analisis">
         <div className="stack">
-          {(() => {
-            const chosen = result?.strategies.find((s) => s.key === "chosen");
-            if (!chosen || derived.noEdge) return null;
-            const cap = state.capital;
-            const st = chosen.stats;
-            const unit = state.mode === "bin" ? "apuestas" : "días de mercado";
-            const ruinCount = Math.round(st.ruinProbability * 10000);
-            return (
-              <div className="card">
-                <div className="card-rule sage" />
-                <div className="card-body plain-card" aria-live="polite">
-                  <span className="label" style={{ color: "var(--sage-text)" }}>
-                    En palabras simples
-                  </span>
-                  <p>
-                    Simulamos <span className="n">{result?.trials}</span> futuros posibles de{" "}
-                    <span className="n">{result?.steps}</span> {unit} con tu fracción (
-                    {state.mult.toFixed(2)}× Kelly).
-                  </p>
-                  <p>
-                    En la mitad de esos futuros, tus {money(cap)} terminan en{" "}
-                    <strong className={"n " + (st.growth >= 0 ? "pos" : "neg")}>
-                      {money(cap * (1 + st.growth))}
-                    </strong>{" "}
-                    o más. Por el camino, la caída típica desde el punto más alto te dejaría en{" "}
-                    <strong className="n neg">{money(cap * (1 - st.maxDrawdown))}</strong> antes
-                    de recuperarte.
-                  </p>
-                  <p>
-                    {ruinCount === 0
-                      ? "Ningún escenario de la simulación perdió más del 90 % del capital."
-                      : `De cada 10,000 escenarios, ${ruinCount.toLocaleString("en-US")} pierden más del 90 % del capital.`}{" "}
-                    Compara las filas de la tabla: más fracción no siempre es más dinero al final.
-                  </p>
-                </div>
+          {chosen && !derived.noEdge && result && (
+            <div className="card">
+              <div className="card-rule sage" />
+              <div className="card-body plain-card" aria-live="polite">
+                <span className="label" style={{ color: "var(--sage-text)" }}>
+                  {L.common.plainLabel}
+                </span>
+                <p>
+                  {A.plainIntro(
+                    result.trials,
+                    result.steps,
+                    state.mode === "bin" ? A.unitBets : A.unitDays,
+                    state.mult.toFixed(2),
+                  )}
+                </p>
+                <p>
+                  {A.plainHalf} <span className="n">{money(state.capital)}</span> {A.plainEndIn}{" "}
+                  <strong className={"n " + (chosen.stats.growth >= 0 ? "pos" : "neg")}>
+                    {money(state.capital * (1 + chosen.stats.growth))}
+                  </strong>{" "}
+                  {A.plainOrMore}{" "}
+                  <strong className="n neg">
+                    {money(state.capital * (1 - chosen.stats.maxDrawdown))}
+                  </strong>{" "}
+                  {A.plainBeforeRecover}
+                </p>
+                <p>
+                  {Math.round(chosen.stats.ruinProbability * 10000) === 0
+                    ? A.plainRuinNone
+                    : A.plainRuinSome(
+                        Math.round(chosen.stats.ruinProbability * 10000).toLocaleString("en-US"),
+                      )}{" "}
+                  {A.plainCompare}
+                </p>
               </div>
-            );
-          })()}
+            </div>
+          )}
 
           <div className="card">
             <div className="card-rule" />
             <div className="card-body">
               <div className="chart-head">
                 <div>
-                  <h3>Simulación de Monte Carlo</h3>
+                  <h3>{A.mcTitle}</h3>
                   <span className="label">
-                    {derived.noEdge
-                      ? "Sin ventaja estadística (f* ≤ 0): nada que simular."
-                      : `Mediana + banda P10–P90 (escala log) · n=${result?.trials ?? settings.trials} trayectorias`}
+                    {derived.noEdge ? A.mcNoEdge : A.mcMeta(result?.trials ?? settings.trials)}
                   </span>
                 </div>
                 <div className="controls-row">
                   {state.mode === "cont" && (
-                    <div className="seg mini" role="group" aria-label="Distribución de los shocks">
+                    <div className="seg mini" role="group" aria-label={A.shocksAria}>
                       <button
                         type="button"
                         aria-pressed={!settings.fatTails}
                         onClick={() => setSettings((s) => ({ ...s, fatTails: false }))}
                       >
-                        Normal
+                        {A.normal}
                       </button>
                       <button
                         type="button"
                         aria-pressed={settings.fatTails}
-                        title="Shocks Student-t(4): caídas extremas mucho más frecuentes"
+                        title={A.fatTitle}
                         onClick={() => setSettings((s) => ({ ...s, fatTails: true }))}
                       >
-                        Colas pesadas
+                        {A.fat}
                       </button>
                     </div>
                   )}
                   <select
-                    aria-label="Horizonte de simulación"
+                    aria-label={A.horizonAria}
                     className="select"
                     value={settings.steps}
                     onChange={(e) => setSettings((s) => ({ ...s, steps: parseInt(e.target.value, 10) }))}
@@ -229,36 +222,31 @@ export default function AnalisisView() {
                     ))}
                   </select>
                   <select
-                    aria-label="Número de trayectorias"
+                    aria-label={A.trialsAria}
                     className="select"
                     value={settings.trials}
                     onChange={(e) => setSettings((s) => ({ ...s, trials: parseInt(e.target.value, 10) }))}
                   >
-                    <option value={200}>200 trayectorias</option>
-                    <option value={400}>400 trayectorias</option>
-                    <option value={1000}>1000 trayectorias</option>
+                    {[200, 400, 1000].map((n) => (
+                      <option key={n} value={n}>
+                        {A.trialsOpt(n)}
+                      </option>
+                    ))}
                   </select>
                   <button type="button" className="btn btn-primary" onClick={run}>
-                    ↻ Re-simular
+                    {A.resim}
                   </button>
                 </div>
               </div>
               <div className="chart-box">
                 <span className="axis-y">log W</span>
-                <canvas
-                  ref={canvasRef}
-                  className="mc-canvas"
-                  role="img"
-                  aria-label="Trayectorias medianas de riqueza y banda de percentiles 10 a 90 para cada estrategia"
-                />
+                <canvas ref={canvasRef} className="mc-canvas" role="img" aria-label={A.mcAria} />
               </div>
-              <p className="axis-x">
-                t ({state.mode === "bin" ? "apuestas" : "días bursátiles; 250 ≈ 1 año"}) →
-              </p>
+              <p className="axis-x">{state.mode === "bin" ? A.tAxisBin : A.tAxisCont}</p>
               <div className="legend" style={{ marginTop: 10 }}>
                 <span>
                   <span className="sw line" style={{ background: "var(--sage)" }} />
-                  Full Kelly (f*)
+                  {A.legFull}
                 </span>
                 <span>
                   <span
@@ -268,11 +256,11 @@ export default function AnalisisView() {
                         "repeating-linear-gradient(90deg, var(--blue) 0 4px, transparent 4px 8px)",
                     }}
                   />
-                  Elegida ({state.mult.toFixed(2)}×) + banda P10–P90
+                  {A.legChosen(state.mult.toFixed(2))}
                 </span>
                 <span>
                   <span className="sw line" style={{ background: "var(--ruin)" }} />
-                  Sobreapuesta (2f*)
+                  {A.legOver}
                 </span>
                 {state.mode === "cont" && (
                   <span>
@@ -283,30 +271,29 @@ export default function AnalisisView() {
                           "repeating-linear-gradient(90deg, var(--ink-70) 0 2px, transparent 2px 5px)",
                       }}
                     />
-                    Buy &amp; Hold (f=1)
+                    {A.legBH}
                   </span>
                 )}
                 <button type="button" className="btn" onClick={() => exportData("csv")}>
-                  ↓ CSV
+                  {L.common.csv}
                 </button>
                 <button type="button" className="btn" onClick={() => exportData("json")}>
-                  ↓ JSON
+                  {L.common.json}
                 </button>
               </div>
             </div>
 
-            {/* Tabla comparativa (crítica #2) */}
             {result && (
               <div className="cmp-wrap">
-                <table className="cmp-table" aria-label="Comparación de estrategias">
+                <table className="cmp-table" aria-label={A.cmpAria}>
                   <thead>
                     <tr>
-                      <th scope="col">Estrategia</th>
-                      <th scope="col">f</th>
-                      <th scope="col">Crec. mediano</th>
-                      <th scope="col">Drawdown máx.</th>
-                      <th scope="col">P(ruina &gt;90 %)</th>
-                      <th scope="col">Sharpe</th>
+                      <th scope="col">{L.common.strategy}</th>
+                      <th scope="col">{A.colF}</th>
+                      <th scope="col">{A.colGrowth}</th>
+                      <th scope="col">{A.colDD}</th>
+                      <th scope="col">{A.colRuin}</th>
+                      <th scope="col">{A.colSharpe}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -330,22 +317,21 @@ export default function AnalisisView() {
             )}
           </div>
 
-          {/* Drawdown temporal (crítica F4-#3) */}
           {isLab && result && !derived.noEdge && (
             <div className="card">
               <div className="card-body">
                 <div className="chart-head">
                   <div>
-                    <h3>Drawdown en el tiempo</h3>
+                    <h3>{A.ddTitle}</h3>
                     <span className="label">
-                      Estrategia elegida ({state.mult.toFixed(2)}×)
-                      {settings.fatTails && state.mode === "cont" ? " · colas pesadas t(4)" : ""}
+                      {A.ddSub(state.mult.toFixed(2))}
+                      {settings.fatTails && state.mode === "cont" ? A.ddFat : ""}
                     </span>
                   </div>
                   <div className="legend">
                     <span>
                       <span className="sw line" style={{ background: "var(--blue)" }} />
-                      Mediana
+                      {A.ddMedian}
                     </span>
                     <span>
                       <span
@@ -355,75 +341,59 @@ export default function AnalisisView() {
                             "repeating-linear-gradient(90deg, var(--ruin) 0 4px, transparent 4px 8px)",
                         }}
                       />
-                      P90 (peor decil)
+                      {A.ddP90}
                     </span>
                   </div>
                 </div>
                 <div className="chart-box">
                   <span className="axis-y">DD</span>
-                  <canvas
-                    ref={ddCanvasRef}
-                    className="dd-canvas"
-                    role="img"
-                    aria-label="Evolución del drawdown en el tiempo: mediana y percentil 90 de la estrategia elegida"
-                  />
+                  <canvas ref={ddCanvasRef} className="dd-canvas" role="img" aria-label={A.ddAria} />
                 </div>
-                <p className="axis-x">
-                  t ({state.mode === "bin" ? "apuestas" : "días bursátiles"}) →
-                </p>
+                <p className="axis-x">{state.mode === "bin" ? A.ddTBin : A.ddTCont}</p>
                 <p className="hint" style={{ marginTop: 8 }}>
-                  El drawdown máximo puntual esconde la experiencia real: esta curva muestra
-                  cuánto tiempo se pasa hundido respecto al pico anterior. Si la línea P90 le
-                  resulta intolerable, su fracción es demasiado alta.
+                  {A.ddHint}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Backtest histórico (PRD Fase 4) */}
           {isLab && state.mode === "cont" && <BacktestCard rPct={state.rPct} />}
 
-          {/* Extras de trading — modo binario (crítica #8) */}
           {state.mode === "bin" && !derived.noEdge && (
             <div className="card">
               <div className="card-body">
                 <span className="label" style={{ color: "var(--blue-deep)", display: "block", marginBottom: 10 }}>
-                  Riesgo operativo (modo binario)
+                  {A.binTitle}
                 </span>
                 <p style={{ marginBottom: 12 }}>
-                  Racha máxima de pérdidas esperada en {settings.steps} apuestas (p={state.pPct} %):{" "}
-                  <span className="mono" style={{ fontWeight: 700 }}>
-                    ≈ {expectedMaxLosingStreak(p, settings.steps).toFixed(1)} seguidas
-                  </span>
-                  . Su fracción y su psicología deben sobrevivir esa racha.
+                  {A.streak(settings.steps, state.pPct, expectedMaxLosingStreak(p, settings.steps).toFixed(1))}
                 </p>
                 {isLab && (
-                <table className="cmp-table" aria-label="Sensibilidad de f* a la probabilidad">
-                  <thead>
-                    <tr>
-                      <th scope="col">Escenario</th>
-                      <th scope="col">p</th>
-                      <th scope="col">f*</th>
-                      <th scope="col">Apuesta</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sensitivity.map((row) => (
-                      <tr key={row.dpp} className={row.dpp === 0 ? "hl" : undefined}>
-                        <th scope="row">
-                          {row.dpp === 0 ? "Su estimación" : row.dpp > 0 ? `p +${row.dpp} pp` : `p −${-row.dpp} pp`}
-                        </th>
-                        <td className="num">{row.pPct.toFixed(1)} %</td>
-                        <td className="num">{fmtPct(row.fs)}</td>
-                        <td className="num">{fmtMoney(row.bet)}</td>
+                  <table className="cmp-table" aria-label={A.sensAria}>
+                    <thead>
+                      <tr>
+                        <th scope="col">{A.colScenario}</th>
+                        <th scope="col">p</th>
+                        <th scope="col">f*</th>
+                        <th scope="col">{A.colBet}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {sensitivity.map((row) => (
+                        <tr key={row.dpp} className={row.dpp === 0 ? "hl" : undefined}>
+                          <th scope="row">
+                            {row.dpp === 0 ? A.yourEstimate : row.dpp > 0 ? `p +${row.dpp} pp` : `p −${-row.dpp} pp`}
+                          </th>
+                          <td className="num">{row.pPct.toFixed(1)} %</td>
+                          <td className="num">{fmtPct(row.fs)}</td>
+                          <td className="num">{fmtMoney(row.bet)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
                 <p className="hint" style={{ marginTop: 8 }}>
-                  Si sobreestima p por 5 puntos, su «óptimo» real puede ser sobreapuesta severa.
-                  Las comisiones y el slippage reducen b efectivo: réstelos antes de calcular.
+                  {A.sensHint}
                 </p>
               </div>
             </div>
@@ -432,48 +402,44 @@ export default function AnalisisView() {
 
         <div className="stack">
           <div className="panel" style={{ padding: 20 }}>
-            <h3 style={{ marginBottom: 14 }}>Parámetros de riesgo</h3>
+            <h3 style={{ marginBottom: 14 }}>{A.riskTitle}</h3>
             <MultSlider flat idSuffix="-analisis" />
             <p className="hint" style={{ marginTop: 8 }}>
-              f elegida actual: <span className="mono">{fmtPct(derived.fChosen)}</span> (f* ={" "}
+              {A.currentF} <span className="mono">{fmtPct(derived.fChosen)}</span> (f* ={" "}
               <span className="mono">{fmtPct(derived.fStar)}</span>)
             </p>
             <div className="warn" style={{ marginTop: 16 }}>
-              <h4>Advertencia de exceso</h4>
-              <p>
-                La sobreapuesta <span className="mono">(f &gt; f*)</span> destruye valor geométrico
-                de forma irreversible. En el límite, f = 2f* garantiza una tasa de crecimiento de
-                cero a largo plazo.
-              </p>
+              <h4>{A.excessTitle}</h4>
+              <p>{A.excessBody}</p>
             </div>
           </div>
 
           {isLab && (
-          <div className="card">
-            <div className="card-body">
-              <span className="label" style={{ color: "var(--blue-deep)", display: "block", marginBottom: 6 }}>
-                Glosario técnico
-              </span>
-              <ul className="glossary">
-                <li>
-                  <span className="sym">f*</span>
-                  <p>Fracción óptima de capital que maximiza la log-riqueza esperada.</p>
-                </li>
-                <li>
-                  <span className="sym">P10/P90</span>
-                  <p>Percentiles de las trayectorias: el 10 % de los escenarios termina por debajo de P10.</p>
-                </li>
-                <li>
-                  <span className="sym">Σ⁻¹</span>
-                  <p>Inversa de la matriz de varianza-covarianza (pestaña Cartera).</p>
-                </li>
-                <li>
-                  <span className="sym">μ−r</span>
-                  <p>Retorno excedente sobre la tasa libre de riesgo.</p>
-                </li>
-              </ul>
+            <div className="card">
+              <div className="card-body">
+                <span className="label" style={{ color: "var(--blue-deep)", display: "block", marginBottom: 6 }}>
+                  {A.glossTitle}
+                </span>
+                <ul className="glossary">
+                  <li>
+                    <span className="sym">f*</span>
+                    <p>{A.glossF}</p>
+                  </li>
+                  <li>
+                    <span className="sym">P10/P90</span>
+                    <p>{A.glossP}</p>
+                  </li>
+                  <li>
+                    <span className="sym">Σ⁻¹</span>
+                    <p>{A.glossSigma}</p>
+                  </li>
+                  <li>
+                    <span className="sym">μ−r</span>
+                    <p>{A.glossMu}</p>
+                  </li>
+                </ul>
+              </div>
             </div>
-          </div>
           )}
         </div>
       </div>
