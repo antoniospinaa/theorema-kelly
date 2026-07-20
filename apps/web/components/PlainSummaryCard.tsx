@@ -4,6 +4,12 @@ import { useKelly } from "./KellyProvider";
 import { money, plainSummary } from "@/lib/plain";
 import { fmtPct } from "@/lib/format";
 
+/** Percentage change vs the starting capital, e.g. "+5.2 %". */
+const pct = (x: number, base: number): string => {
+  const v = (x / base - 1) * 100;
+  return (v >= 0 ? "+" : "") + v.toFixed(1) + " %";
+};
+
 /** "En palabras simples": the answer an investor/bettor actually asked for. */
 export default function PlainSummaryCard() {
   const { state, derived } = useKelly();
@@ -35,11 +41,17 @@ export default function PlainSummaryCard() {
             <p>
               Tras {p.horizon} típico tendrías{" "}
               <strong className={"n " + (p.typical >= p.base ? "pos" : "neg")}>
-                {money(p.typical)}
+                {money(p.typical)} ({pct(p.typical, p.base)})
               </strong>
               . En un mal escenario (1 de cada 10):{" "}
-              <strong className="n neg">{money(p.bad)}</strong>. En uno bueno (1 de cada 10):{" "}
-              <strong className="n pos">{money(p.good)}</strong>.
+              <strong className="n neg">
+                {money(p.bad)} ({pct(p.bad, p.base)})
+              </strong>
+              . En uno bueno (1 de cada 10):{" "}
+              <strong className="n pos">
+                {money(p.good)} ({pct(p.good, p.base)})
+              </strong>
+              .
             </p>
             {p.doubling && (
               <p>

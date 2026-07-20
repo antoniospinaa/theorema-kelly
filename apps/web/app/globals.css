@@ -312,3 +312,5 @@ input[type="text"]:focus, .select:focus{border-color:var(--blue); outline:2px so
 .plain-card p{font-size:16px; line-height:25px; margin-top:10px; color:var(--ink);}
 .plain-card p.hint{font-size:12px; line-height:16px; color:var(--ink-55);}
 .plain-card .n{font-family:var(--mono); font-variant-numeric:tabular-nums; font-weight:700;}
+.plain-list{list-style:none; margin-top:8px;}
+.plain-list li{font-size:16px; line-height:25px; padding:4px 0 4px 14px; border-left:2px solid var(--hairline);}

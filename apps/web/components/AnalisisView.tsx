@@ -134,6 +134,13 @@ export default function AnalisisView() {
       <div className="page-head">
         <h1 id="h-analisis">Análisis de trayectorias</h1>
         <p>Simulación de Monte Carlo con los parámetros definidos en «Criterio».</p>
+        <p className="status-line" style={{ marginTop: 8 }}>
+          Simulando: {state.sourceLabel ?? "supuestos manuales"} ·{" "}
+          {state.mode === "cont"
+            ? `μ=${state.muPct.toFixed(1)} % · σ=${state.sigmaPct.toFixed(1)} % · r=${state.rPct.toFixed(2)} %`
+            : `p=${state.pPct.toFixed(1)} % · pago ${state.b} a 1`}{" "}
+          · cámbielos en la pestaña «Criterio».
+        </p>
       </div>
 
       <div className="layout-analisis">

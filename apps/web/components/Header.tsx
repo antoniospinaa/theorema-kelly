@@ -16,7 +16,7 @@ export default function Header() {
     <header className="topbar">
       <div className="topbar-inner">
         <span className="brand">
-          Theorema Kelly<span className="ver">v0.5.0</span>
+          Theorema Kelly<span className="ver">v0.5.1</span>
         </span>
         <nav className="tabs" aria-label="Secciones">
           {tab("/", "Criterio")}

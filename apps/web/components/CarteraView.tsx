@@ -13,6 +13,7 @@ import { useKelly } from "./KellyProvider";
 import { alignSeries, fetchPrices, fetchRiskFree } from "@/lib/market";
 import { downloadCSV } from "@/lib/export";
 import { fmtMoney, fmtPct } from "@/lib/format";
+import { money } from "@/lib/plain";
 
 interface PortfolioRow {
   ticker: string;
@@ -112,6 +113,7 @@ export default function CarteraView() {
       muPct: Math.round(stats.muAnnual * 10000) / 100,
       sigmaPct: Math.round(stats.sigmaAnnual * 10000) / 100,
       rPct: Math.round(result.rPct * 100) / 100,
+      sourceLabel: `Cartera: ${result.rows.map((r) => r.ticker).join(" + ")}`,
     });
     router.push("/analisis");
   };
@@ -203,6 +205,54 @@ export default function CarteraView() {
         </div>
 
         <div className="stack">
+          {result && (
+            <div className="card">
+              <div className="card-rule sage" />
+              <div className="card-body plain-card" aria-live="polite">
+                <span className="label" style={{ color: "var(--sage-text)" }}>
+                  En palabras simples
+                </span>
+                <p>
+                  El modelo miró el historial de {result.rows.map((r) => r.ticker).join(", ")} y
+                  calculó cómo repartiría tu dinero para crecer lo más rápido posible sin
+                  quebrar. Con tus {money(state.capital)} y tu multiplicador ({mult.toFixed(2)}×),
+                  hoy pondría:
+                </p>
+                <ul className="plain-list">
+                  {result.rows.map((r) => {
+                    const applied = r.weight * mult;
+                    return (
+                      <li key={r.ticker}>
+                        <strong className="n" style={{ color: applied < 0 ? "var(--ruin)" : "var(--blue-deep)" }}>
+                          {money(Math.abs(applied) * state.capital)}
+                        </strong>{" "}
+                        {applied < 0 ? "en corto contra" : "en"} {r.ticker} (
+                        {fmtPct(Math.abs(applied), 1)})
+                      </li>
+                    );
+                  })}
+                  {totalFull * mult < 1 ? (
+                    <li>
+                      <strong className="n">{money((1 - totalFull * mult) * state.capital)}</strong>{" "}
+                      quedan en efectivo / T-Bills
+                    </li>
+                  ) : totalFull * mult > 1 ? (
+                    <li className="neg">
+                      pedirías prestado{" "}
+                      <strong className="n">{money((totalFull * mult - 1) * state.capital)}</strong>{" "}
+                      (apalancamiento — no recomendado)
+                    </li>
+                  ) : null}
+                </ul>
+                <p className="hint">
+                  «Full Kelly» = lo que el modelo pondría sin frenos; «Aplicado» = con tu
+                  multiplicador. μ̂ (retorno) y σ̂ (volatilidad) salen del historial elegido, así
+                  que cambian si cambias la ventana — trátalos como estimaciones, no verdades.
+                </p>
+              </div>
+            </div>
+          )}
+
           {result ? (
             <div className="card">
               <div className="card-rule" />

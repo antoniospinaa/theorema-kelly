@@ -13,16 +13,16 @@ import type { KellyState } from "@/lib/state";
 
 /* --- Ejemplos precargados (crítica UX: onboarding) ----------------- */
 const EXAMPLES: Array<{ label: string; patch: Partial<KellyState> }> = [
-  { label: "Moneda sesgada", patch: { mode: "bin", pPct: 55, b: 1, mult: 0.5 } },
-  { label: "Acción típica", patch: { mode: "cont", muPct: 8, sigmaPct: 20, rPct: 4, mult: 0.5 } },
-  { label: "Cripto", patch: { mode: "cont", muPct: 30, sigmaPct: 70, rPct: 4, mult: 0.25 } },
+  { label: "Moneda sesgada", patch: { mode: "bin", pPct: 55, b: 1, mult: 0.5, sourceLabel: "Ejemplo: moneda sesgada 55/45" } },
+  { label: "Acción típica", patch: { mode: "cont", muPct: 8, sigmaPct: 20, rPct: 4, mult: 0.5, sourceLabel: "Ejemplo: acción típica" } },
+  { label: "Cripto", patch: { mode: "cont", muPct: 30, sigmaPct: 70, rPct: 4, mult: 0.25, sourceLabel: "Ejemplo: cripto" } },
 ];
 
 /* --- Perfiles de supuestos (modo continuo) --------------------------- */
 const PROFILES: Array<{ label: string; patch: Partial<KellyState> }> = [
-  { label: "Conservador", patch: { muPct: 6, sigmaPct: 12, mult: 0.25 } },
-  { label: "Base", patch: { muPct: 8, sigmaPct: 18, mult: 0.5 } },
-  { label: "Agresivo", patch: { muPct: 12, sigmaPct: 30, mult: 0.5 } },
+  { label: "Conservador", patch: { muPct: 6, sigmaPct: 12, mult: 0.25, sourceLabel: "Perfil conservador" } },
+  { label: "Base", patch: { muPct: 8, sigmaPct: 18, mult: 0.5, sourceLabel: "Perfil base" } },
+  { label: "Agresivo", patch: { muPct: 12, sigmaPct: 30, mult: 0.5, sourceLabel: "Perfil agresivo" } },
 ];
 
 /** CTA de la tarjeta de plausibilidad: lleva los supuestos a un rango prudente. */
@@ -113,6 +113,7 @@ export default function CriterioView() {
         mode: "cont",
         muPct: Math.round(est.muAnnual * 10000) / 100,
         sigmaPct: Math.round(est.sigmaAnnual * 10000) / 100,
+        sourceLabel: `${est.ticker} (historial de ${windowDays} días)`,
       });
       setEstStatus(
         `${est.ticker} (${est.source}) · ${est.from} → ${est.to} · n=${est.n} retornos · cierre ${fmtMoney(est.lastClose)} · μ̂=${(est.muAnnual * 100).toFixed(1)} % · σ̂=${(est.sigmaAnnual * 100).toFixed(1)} %`,
@@ -219,7 +220,7 @@ export default function CriterioView() {
                         const preset = BET_PRESETS.find((p) => p.id === e.target.value);
                         setBetPreset(e.target.value);
                         if (preset?.pPct !== undefined && preset?.b !== undefined) {
-                          update({ pPct: preset.pPct, b: preset.b });
+                          update({ pPct: preset.pPct, b: preset.b, sourceLabel: `Apuesta: ${preset.label}` });
                         }
                       }}
                     >
@@ -241,7 +242,7 @@ export default function CriterioView() {
                       min={0.1}
                       max={99.9}
                       step={0.1}
-                      onCommit={(n) => update({ pPct: n })}
+                      onCommit={(n) => update({ pPct: n, sourceLabel: null })}
                     />
                     <NumField
                       id="payb"
@@ -251,7 +252,7 @@ export default function CriterioView() {
                       value={state.b}
                       min={0.01}
                       step={0.1}
-                      onCommit={(n) => update({ b: n })}
+                      onCommit={(n) => update({ b: n, sourceLabel: null })}
                     />
                   </div>
                 </fieldset>
@@ -282,6 +283,10 @@ export default function CriterioView() {
                         <option value={504}>504 días (2 a)</option>
                       </select>
                     </div>
+                    <p className="hint">
+                      La ventana es cuánto historial de precios se usa para calcular μ̂ y σ̂
+                      (252 días ≈ 1 año bursátil). Más corta reacciona rápido pero es más ruidosa.
+                    </p>
                     <div className="estimator-row">
                       <button type="button" className="btn btn-primary" onClick={handleEstimate} disabled={busy}>
                         {busy ? "Consultando…" : "Estimar μ y σ"}
@@ -319,7 +324,7 @@ export default function CriterioView() {
                       min={-100}
                       max={200}
                       step={0.5}
-                      onCommit={(n) => update({ muPct: n })}
+                      onCommit={(n) => update({ muPct: n, sourceLabel: null })}
                     />
                     <NumField
                       id="sigma"
@@ -330,7 +335,7 @@ export default function CriterioView() {
                       min={0.1}
                       max={300}
                       step={0.5}
-                      onCommit={(n) => update({ sigmaPct: n })}
+                      onCommit={(n) => update({ sigmaPct: n, sourceLabel: null })}
                     />
                   </div>
                   <NumField

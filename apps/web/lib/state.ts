@@ -26,6 +26,12 @@ export interface KellyState {
   sigmaPct: number;
   /** Kelly multiplier applied by the user (1 = full Kelly). */
   mult: number;
+  /**
+   * Where the current assumptions came from (ticker estimate, profile,
+   * example, portfolio bridge). null = manually entered. Shown in Análisis
+   * so the user always knows what the simulation refers to.
+   */
+  sourceLabel: string | null;
 }
 
 export const DEFAULT_STATE: KellyState = {
@@ -40,4 +46,5 @@ export const DEFAULT_STATE: KellyState = {
   // Default to ½ Kelly: full Kelly assumes perfectly estimated parameters,
   // which never holds in practice (UX critique: protect users from defaults).
   mult: 0.5,
+  sourceLabel: "Ejemplo: moneda sesgada 55/45",
 };
