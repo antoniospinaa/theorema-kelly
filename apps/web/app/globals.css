@@ -314,3 +314,11 @@ input[type="text"]:focus, .select:focus{border-color:var(--blue); outline:2px so
 .plain-card .n{font-family:var(--mono); font-variant-numeric:tabular-nums; font-weight:700;}
 .plain-list{list-style:none; margin-top:8px;}
 .plain-list li{font-size:16px; line-height:25px; padding:4px 0 4px 14px; border-left:2px solid var(--hairline);}
+
+/* ---- v0.7: auth --------------------------------------------------------- */
+.auth-box{display:inline-flex; align-items:center; gap:8px;}
+.auth-name{
+  font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--blue-deep); max-width:120px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}

@@ -1,7 +1,7 @@
 {
   "name": "theorema-kelly",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Kelly Criterion decision-support lab — monorepo (Next.js app + pure TypeScript math engine)",
   "workspaces": [
     "apps/*",

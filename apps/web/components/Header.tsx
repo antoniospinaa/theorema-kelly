@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useKelly } from "./KellyProvider";
+import AuthButton from "./AuthButton";
 
 export default function Header() {
   const path = usePathname();
@@ -16,7 +17,7 @@ export default function Header() {
     <header className="topbar">
       <div className="topbar-inner">
         <span className="brand">
-          Theorema Kelly<span className="ver">v0.6.0</span>
+          Theorema Kelly<span className="ver">v0.7.0</span>
         </span>
         <nav className="tabs" aria-label="Secciones">
           {tab("/", L.header.tabs.criterio)}
@@ -56,6 +57,7 @@ export default function Header() {
             EN
           </button>
         </div>
+        <AuthButton />
       </div>
     </header>
   );

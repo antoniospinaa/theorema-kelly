@@ -98,7 +98,27 @@ outside root directory" enabled). No environment variables are required for Phas
 | 2 | Live market data (prices, μ̂/σ̂, risk-free) | ✅ on-demand; Supabase audit trail pending |
 | 3 | Multivariate portfolio, Kelly≡MVO equivalence, condensation | ✅ `/cartera` (v0.3.0) |
 | 4 | Historical backtesting, μ-perturbation, fat tails, drawdown paths | ✅ (v0.4.0) |
-| 5 | Paper-trading journal (Supabase Auth) | — |
+| 5 | Supabase Auth (Google) + positions schema | ✅ auth live (v0.7.0); positions dashboard next |
+
+### Phase 5 — accounts (v0.7.0)
+
+Google sign-in via Supabase Auth (`@supabase/supabase-js`, PKCE). The auth button lives in the
+header and hides gracefully when no backend is configured. Database schema (with RLS) is
+applied to the live project, including the `positions` table that will back the upcoming
+"My positions" dashboard.
+
+**Setup** (one-time):
+
+1. **Env vars** — copy `apps/web/.env.example` to `.env.local` and set the same two vars in
+   Vercel (Project → Settings → Environment Variables):
+   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+2. **Google OAuth** — in [Google Cloud Console](https://console.cloud.google.com): create a
+   project → OAuth consent screen (External) → Credentials → *Create OAuth client ID* (Web
+   application) → add authorized redirect URI
+   `https://<PROJECT-REF>.supabase.co/auth/v1/callback` → copy Client ID + Secret.
+3. **Supabase** — Dashboard → Authentication → Providers → Google → paste Client ID/Secret and
+   enable. Then Authentication → URL Configuration → set *Site URL* to the production domain
+   and add `http://localhost:3000` to *Redirect URLs*.
 
 ### Internationalization (v0.6.0)
 
