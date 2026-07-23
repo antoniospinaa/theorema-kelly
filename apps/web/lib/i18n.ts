@@ -1,5 +1,5 @@
 /**
- * Internationalization (v0.7.0). Single source of truth for every
+ * Internationalization (v0.7.1). Single source of truth for every
  * user-facing string. `en` is typed against `es`, so a missing key is a
  * compile error. Interpolated strings are functions.
  */
@@ -352,7 +352,7 @@ const es = {
       "Descargo de responsabilidad: Theorema Kelly es una herramienta educativa de apoyo a la decisión. No constituye asesoría financiera ni una plataforma de corretaje. Los resultados de simulación son estocásticos y no predicen rendimientos reales.",
     methodology: "Metodología",
     disclaimerLink: "Descargo de responsabilidad",
-    based: "web v0.7.0 · kelly-engine v0.3.0 · Basado en Kelly (1956)",
+    based: "web v0.7.1 · kelly-engine v0.3.0 · Basado en Kelly (1956)",
     methBinTitle: "Apuesta binaria",
     methBinBody: "(Kelly, 1956). Con probabilidad de ganar p, de perder q = 1−p y pago b a 1:",
     methContTitle: "Activo continuo",
@@ -709,7 +709,7 @@ const en: typeof es = {
       "Disclaimer: Theorema Kelly is an educational decision-support tool. It is not financial advice nor a brokerage platform. Simulation results are stochastic and do not predict real returns.",
     methodology: "Methodology",
     disclaimerLink: "Disclaimer",
-    based: "web v0.7.0 · kelly-engine v0.3.0 · Based on Kelly (1956)",
+    based: "web v0.7.1 · kelly-engine v0.3.0 · Based on Kelly (1956)",
     methBinTitle: "Binary bet",
     methBinBody: "(Kelly, 1956). With win probability p, loss probability q = 1−p and payout b to 1:",
     methContTitle: "Continuous asset",

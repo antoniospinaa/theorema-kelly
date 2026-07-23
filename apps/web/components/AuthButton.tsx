@@ -37,17 +37,19 @@ export default function AuthButton() {
   }
 
   return (
-    <button
-      type="button"
-      className="btn btn-primary"
-      onClick={() =>
-        void supabase?.auth.signInWithOAuth({
-          provider: "google",
-          options: { redirectTo: window.location.origin },
-        })
-      }
-    >
-      {L.auth.signIn}
-    </button>
+    <div className="auth-box">
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={() =>
+          void supabase?.auth.signInWithOAuth({
+            provider: "google",
+            options: { redirectTo: window.location.origin },
+          })
+        }
+      >
+        {L.auth.signIn}
+      </button>
+    </div>
   );
 }

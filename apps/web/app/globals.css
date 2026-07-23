@@ -317,8 +317,62 @@ input[type="text"]:focus, .select:focus{border-color:var(--blue); outline:2px so
 
 /* ---- v0.7: auth --------------------------------------------------------- */
 .auth-box{display:inline-flex; align-items:center; gap:8px;}
+.auth-box .btn{white-space:nowrap;}
 .auth-name{
   font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.05em;
   text-transform:uppercase; color:var(--blue-deep); max-width:120px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* ============================================================
+   v0.7.1 — Pulido móvil ("technical paper in your pocket")
+   ============================================================ */
+@media (max-width: 767px){
+  /* Header en dos filas: marca + controles arriba, pestañas abajo */
+  .topbar-inner{padding:10px 14px; gap:8px; row-gap:6px;}
+  .brand{font-size:16px;}
+  .brand .ver{display:none;}
+  .view-toggle{order:1; margin-left:auto;}
+  .topbar-inner > .seg.mini:not(.view-toggle){order:2;}
+  .topbar-inner > .auth-box{order:2;}
+  nav.tabs{order:3; width:100%; margin-left:0;}
+  nav.tabs a{flex:1; justify-content:center; padding:8px 4px; font-size:11px; min-height:40px;}
+  .seg.mini button{min-height:32px; padding:6px 8px; font-size:10px;}
+  .auth-box .btn{padding:6px 10px; min-height:32px; font-size:10px;}
+
+  /* Espaciado general más compacto */
+  main{padding:16px 14px 40px;}
+  .card-body{padding:16px 14px;}
+  .page-head h1{font-size:26px; line-height:32px;}
+  .foot-inner{padding:20px 14px 32px;}
+  .panel{padding:16px 14px !important;}
+
+  /* Formularios: 16px evita el auto-zoom de iOS al enfocar */
+  input[type="number"], input[type="text"], .select{font-size:16px;}
+  .estimator-row{grid-template-columns:1fr;}
+  .presets{grid-template-columns:repeat(2,1fr);}
+  .controls-row{width:100%;}
+  .controls-row .select{flex:1 1 45%;}
+  .controls-row .btn{flex:1 1 100%;}
+  .chart-head{flex-direction:column; align-items:stretch;}
+  .chart-head .legend{justify-content:flex-start;}
+
+  /* Tablas: scroll horizontal en vez de desbordar la tarjeta */
+  .cmp-table{display:block; overflow-x:auto; -webkit-overflow-scrolling:touch;}
+
+  /* Gráficas un poco más bajas para que quepan con su contexto */
+  .g-canvas{height:240px;}
+  .mc-canvas{height:260px;}
+  .dd-canvas{height:180px;}
+
+  /* Resultados grandes sin desbordar */
+  .bet-card output, .stat output.big{font-size:22px; line-height:30px;}
+  .plain-card p{font-size:15px; line-height:23px;}
+  .plain-list li{font-size:15px; line-height:23px;}
+}
+
+@media (max-width: 479px){
+  /* Teléfonos angostos: campos en una sola columna */
+  .grid-2{grid-template-columns:1fr;}
+  .examples-row .btn{flex:1 1 40%;}
 }
